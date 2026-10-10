@@ -75,6 +75,25 @@
     }
     main .btn { flex: 1; min-height: 88px; }
     main .btn.primary { flex: 1.4; }
+    /* Secondary choices (like Settings on home): always there, but quieter. */
+    main .btn.minor {
+      flex: 0 0 auto;
+      min-height: 64px;
+      background: transparent;
+      font-size: 18px;
+      color: var(--muted);
+    }
+    main .btn.minor .icon { width: 24px; height: 24px; color: var(--muted); }
+
+    /* Plain sentences, like "What Glance remembers". Not buttons, so they
+       don't look like something to select. */
+    .facts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
+    .facts li {
+      padding-left: 16px;
+      border-left: 3px solid var(--accent);
+      font-size: 19px;
+      line-height: 1.45;
+    }
     .btn:hover { border-color: var(--accent); }
     .btn:disabled { opacity: 0.45; cursor: default; border-color: var(--card-edge); }
 

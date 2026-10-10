@@ -94,6 +94,12 @@ const connectedApps = () => Object.keys(CONNECTIONS).filter((id) => stored.conne
 const anyConnected = () => connectedApps().length > 0;
 const appName = (id) => CONNECTIONS[id]?.name ?? id;
 
+// "Netflix", "Netflix and YouTube", "Netflix, Hulu, and YouTube"
+function listJoin(items) {
+  if (items.length <= 2) return items.join(" and ");
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+}
+
 // Shows the person has started, across every connected app, most recent
 // first. Each app's list keeps its own order; Glance's last play counts too.
 function startedShows() {
@@ -264,8 +270,11 @@ const screens = {
 
   // Everyday
 
-  home: () => {
-    const item = startedShows()[0];
+  // The Continue card shows the most recent started show; Something else
+  // swaps it for the next one.
+  home: (offset = 0) => {
+    const shows = startedShows();
+    const item = shows.length ? shows[offset % shows.length] : null;
     const buttons = [];
     if (item) {
       buttons.push({
@@ -286,37 +295,63 @@ const screens = {
         icon: "search",
         disabled: !anyConnected(),
         onSelect: () => go("find"),
-      }
+      },
+      // Quieter than the main choices, but always visible.
+      { label: "Settings", icon: "settings", minor: true, onSelect: () => go("settings") }
     );
     return {
       greeting: greeting(),
       heading: "What are you in the mood for?",
       buttons,
-      note: anyConnected() ? "" : "No apps are on yet. Look at Something else, then Settings.",
-      onElse: () => go("more"),
+      note: anyConnected() ? "" : "No apps are on yet. Look at Settings to add one.",
+      onElse: shows.length > 1 ? () => replace("home", offset + 1) : null,
     };
   },
-
-  more: () => ({
-    heading: "More options",
-    buttons: [
-      { label: "Videos", sub: "Coming soon", icon: "play", disabled: true },
-      { label: "Settings", icon: "settings", onSelect: () => go("settings") },
-    ],
-  }),
 
   settings: () => ({
     heading: "Settings",
     buttons: [
       {
         label: "Your apps",
-        sub: anyConnected() ? `On: ${connectedApps().map(appName).join(", ")}` : "No apps on yet",
+        sub: anyConnected() ? `On: ${listJoin(connectedApps().map(appName))}` : "No apps on yet",
         icon: "tv",
         onSelect: () => go("connections"),
       },
-      { label: "What Glance remembers", sub: "Coming soon", icon: "clock", disabled: true },
+      { label: "What Glance remembers", icon: "clock", onSelect: () => go("memory") },
     ],
   }),
+
+  // What Glance remembers, in plain sentences. (Learning preferences, clearing
+  // memory and "don't remember" come later; see docs/memory.md.)
+  memory: () => {
+    const shows = startedShows();
+    const facts = [];
+    if (shows.length) {
+      const latest = shows[0];
+      const where = `${latest.title} on ${appName(latest.service)}`;
+      const noun = shows.some((show) => CONNECTIONS[show.service]?.kind === "videos")
+        ? "shows and videos"
+        : "shows";
+      facts.push(
+        shows.length === 1
+          ? `You're partway through ${where}.`
+          : `You're partway through ${shows.length} ${noun}. The most recent is ${where}.`
+      );
+    } else {
+      facts.push("You haven't started anything yet.");
+    }
+    facts.push(
+      anyConnected() ? `You watch on ${listJoin(connectedApps().map(appName))}.` : "No apps are on yet."
+    );
+    facts.push("As you choose, Glance will learn what you enjoy, like funny shows in the evening.");
+    facts.push("All of this stays on this device.");
+    return {
+      heading: "What Glance remembers",
+      intro: "Glance remembers a little, so what you want is usually the first thing you see.",
+      facts,
+      buttons: [],
+    };
+  },
 
   // Asks before doing something the person might not mean to do. The safe
   // choice comes first and is highlighted, so a stray look changes nothing.
@@ -476,9 +511,11 @@ function select(button, action, { immediate = false } = {}) {
   }, CONFIRM_MS);
 }
 
-function makeButton({ label, sub, icon, art, badge, primary, on, disabled, immediate, onSelect }) {
+function makeButton({ label, sub, icon, art, badge, primary, minor, on, disabled, immediate, onSelect }) {
   const button = document.createElement("button");
-  button.className = ["btn", primary && "primary", on && "on"].filter(Boolean).join(" ");
+  button.className = ["btn", primary && "primary", minor && "minor", on && "on"]
+    .filter(Boolean)
+    .join(" ");
 
   // Artwork when we have it (falling back to the icon if it fails to load).
   const iconNode = icon ? iconEl(icon) : null;
@@ -541,6 +578,17 @@ function render() {
     query.className = "query";
     query.append(iconEl("search"), screen.query);
     parts.push(query);
+  }
+
+  if (screen.facts) {
+    const facts = document.createElement("ul");
+    facts.className = "facts";
+    for (const fact of screen.facts) {
+      const li = document.createElement("li");
+      li.textContent = fact;
+      facts.append(li);
+    }
+    parts.push(facts);
   }
 
   parts.push(...screen.buttons.map(makeButton));

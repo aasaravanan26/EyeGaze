@@ -54,5 +54,6 @@ Glance is early, and memory is being built step by step.
 | Remembering the last thing Glance played | ✅ Built, being tested |
 | Mood, time-of-day and app preferences | Planned, arriving with the question screen |
 | Passed-on shows | Planned |
-| Settings: see, clear, "don't remember" | Planned |
+| Settings: see what Glance remembers | ✅ Built |
+| Settings: clear, "don't remember" | Planned |
 | Short summary for the AI | Planned, arriving with the AI agent |
