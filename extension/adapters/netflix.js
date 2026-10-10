@@ -77,7 +77,7 @@ function readSearchResults() {
     if (!match || !title || seen.has(match[1])) continue;
     seen.add(match[1]);
     items.push({ id: match[1], title, image: img?.src || null });
-    if (items.length === 3) break;
+    if (items.length === 9) break;
   }
   return items;
 }

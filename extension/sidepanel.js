@@ -1,14 +1,13 @@
-// The side panel: Glance's screens of big buttons.
-
-const NETFLIX = "https://www.netflix.com";
+// The side panel: Glance's screens of big buttons. Every screen works across
+// all connected apps; each app's details live in connections.js.
 
 // Everything Glance keeps in chrome.storage.local on this device:
 //   "setupDone": first-time setup has been finished
 //   "connections": which apps are on, e.g. { netflix: true }
-//   "netflix.connectedAt": when the adapter last saw Netflix's home page
-//   "netflix.continueWatching": read from Netflix's own row by the adapter
-//   "netflix.search": the latest search results read by the adapter
-//   "lastWatched": the last thing Glance started playing
+//   "<app>.connectedAt": when the app's adapter last saw its home page
+//   "<app>.continueWatching": the app's own "continue" list, read by its adapter
+//   "<app>.search": the app's latest search results, read by its adapter
+//   "lastWatched": the last thing Glance started playing, e.g. { service, id, ... }
 let stored = {};
 
 const screenEl = document.getElementById("screen");
@@ -22,8 +21,20 @@ let current = null;
 const trail = [];
 
 // Search by name: letters are picked in two looks (a group, then a letter).
-const LETTER_GROUPS = ["ABCDE", "FGHIJ", "KLMNO", "PQRST", "UVWXYZ"];
-const search = { query: "", group: null };
+// Four groups plus Space and Delete make six big keys.
+const LETTER_GROUPS = ["ABCDEF", "GHIJKL", "MNOPQR", "STUVWXYZ"];
+const search = { query: "", group: null, startedAt: 0, page: 0 };
+
+// Results are shown three at a time; Something else shows the next three.
+const PAGE_SIZE = 3;
+
+// Results from several apps arrive at different times. Wait this long for
+// all of them before showing the list, so it doesn't reshuffle under the
+// person's eyes.
+const SETTLE_MS = 1500;
+
+// A selection shows a brief confirmation fill before anything happens.
+const CONFIRM_MS = 180;
 
 // ---------- Small helpers ----------
 
@@ -42,6 +53,7 @@ const ICONS = {
   settings:
     '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
   backspace: '<path d="M21 5H9l-6 7 6 7h12z"/><path d="M13 10l4 4M17 10l-4 4"/>',
+  space: '<path d="M4 10v4h16v-4"/>',
 };
 
 function iconEl(name) {
@@ -66,30 +78,97 @@ function greeting() {
   return "Good evening";
 }
 
-const netflixOn = () => Boolean(stored.connections?.netflix);
+// ---------- Data across connected apps ----------
 
-// Shows the person has started: Netflix's own row first, then our fallback.
+// The apps that are on, in preference order. (For now that's the order in
+// connections.js; later, memory can put the most-used app first.)
+const connectedApps = () => Object.keys(CONNECTIONS).filter((id) => stored.connections?.[id]);
+const anyConnected = () => connectedApps().length > 0;
+const appName = (id) => CONNECTIONS[id]?.name ?? id;
+
+// Shows the person has started, across every connected app, most recent
+// first. Each app's list keeps its own order; Glance's last play counts too.
 function startedShows() {
-  const fromNetflix = stored["netflix.continueWatching"]?.items ?? [];
-  if (fromNetflix.length) return fromNetflix;
-  return stored.lastWatched ? [stored.lastWatched] : [];
+  const shows = [];
+  for (const service of connectedApps()) {
+    const list = stored[`${service}.continueWatching`];
+    list?.items.forEach((item, index) => {
+      shows.push({ ...item, service, seenAt: (list.updatedAt ?? 0) - index });
+    });
+  }
+  const last = stored.lastWatched;
+  if (last && stored.connections?.[last.service]) {
+    const match = shows.find((show) => show.service === last.service && show.id === last.id);
+    if (match) match.seenAt = Math.max(match.seenAt, last.at);
+    else shows.push({ ...last, seenAt: last.at });
+  }
+  return shows.sort((a, b) => b.seenAt - a.seenAt);
 }
 
+// Search results from every connected app, merged: take each app's #1, then
+// each app's #2, and so on; skip titles already found in a preferred app;
+// and put titles that start with what's been spelled first.
 function searchResults() {
   const query = search.query.trim();
   if (!query) return { items: [], note: "Spell the name one letter at a time. Matches appear here." };
-  const saved = stored["netflix.search"];
-  if (saved?.query !== query) return { items: [], note: "Searching Netflix…" };
-  if (!saved.items.length) return { items: [], note: "No matches yet. Add another letter." };
-  return { items: saved.items, note: "" };
+
+  const apps = connectedApps();
+  const ready = apps
+    .map((service) => ({ service, saved: stored[`${service}.search`] }))
+    .filter(({ saved }) => saved?.query === query);
+  const waiting = apps.length - ready.length;
+  const searchingNote = apps.length === 1 ? `Searching ${appName(apps[0])}…` : "Searching your apps…";
+  if (waiting && Date.now() - search.startedAt < SETTLE_MS) return { items: [], note: searchingNote };
+
+  const merged = [];
+  const titles = new Set();
+  const longest = Math.max(...ready.map(({ saved }) => saved.items.length), 0);
+  for (let rank = 0; rank < longest; rank++) {
+    for (const { service, saved } of ready) {
+      const item = saved.items[rank];
+      const key = item?.title.toLowerCase();
+      if (!item || titles.has(key)) continue;
+      titles.add(key);
+      merged.push({ ...item, service });
+    }
+  }
+  const startsWithQuery = (item) => item.title.toLowerCase().startsWith(query.toLowerCase());
+  merged.sort((a, b) => startsWithQuery(b) - startsWithQuery(a));
+
+  if (!merged.length) {
+    return { items: [], pages: 0, note: waiting ? searchingNote : "No matches yet. Add another letter." };
+  }
+  const pages = Math.ceil(merged.length / PAGE_SIZE);
+  const page = search.page % pages;
+  let note = waiting ? "Still searching…" : "";
+  if (pages > 1) note = `Page ${page + 1} of ${pages}. Something else shows more.`;
+  return { items: merged.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), pages, note };
 }
 
 const showButton = (item) => ({
   label: item.title,
+  sub: appName(item.service),
   art: item.image,
   icon: "play",
   onSelect: () => play(item),
 });
+
+// An app's card in setup: look at it to turn it on or off.
+function connectionButton(id) {
+  const { name, icon, setupHint } = CONNECTIONS[id];
+  const on = Boolean(stored.connections?.[id]);
+  let sub = "Look here to turn on";
+  if (on) sub = stored[`${id}.connectedAt`] ? "✓ Connected" : setupHint;
+  return {
+    label: name,
+    sub,
+    icon,
+    badge: on ? "On" : "Off",
+    on,
+    immediate: true,
+    onSelect: () => toggleConnection(id, on),
+  };
+}
 
 // ---------- Screens ----------
 
@@ -102,35 +181,25 @@ const screens = {
     buttons: [{ label: "Set up", icon: "next", primary: true, onSelect: () => go("connections") }],
   }),
 
-  connections: () => {
-    const on = netflixOn();
-    let sub = "Look here to turn on";
-    if (on) {
-      sub = stored["netflix.connectedAt"]
-        ? "✓ Connected"
-        : "Sign in and pick your profile in the Netflix tab";
-    }
-    return {
-      heading: "Which apps do you use?",
-      intro: "Look at an app to turn it on or off.",
-      buttons: [
-        {
-          label: "Netflix",
-          sub,
-          icon: "tv",
-          badge: on ? "On" : "Off",
-          on,
-          onSelect: () => toggleConnection("netflix", on),
-        },
-        { label: "YouTube", sub: "Coming soon", icon: "play", badge: "Soon", disabled: true },
-        {
-          label: "Done",
-          icon: "check",
-          onSelect: () => (stored.setupDone ? back() : go("ready")),
-        },
-      ],
-    };
-  },
+  connections: () => ({
+    heading: "Which apps do you use?",
+    intro: "Look at an app to turn it on or off.",
+    buttons: [
+      ...Object.keys(CONNECTIONS).map(connectionButton),
+      ...COMING_SOON.map(({ name, icon }) => ({
+        label: name,
+        sub: "Coming soon",
+        icon,
+        badge: "Soon",
+        disabled: true,
+      })),
+      {
+        label: "Done",
+        icon: "check",
+        onSelect: () => (stored.setupDone ? back() : go("ready")),
+      },
+    ],
+  }),
 
   ready: () => ({
     heading: "You're all set",
@@ -141,22 +210,26 @@ const screens = {
   // Everyday
 
   home: () => {
-    const item = netflixOn() ? startedShows()[0] : null;
+    const item = startedShows()[0];
     const buttons = [];
     if (item) {
-      buttons.push({ ...showButton(item), sub: "Continue watching", primary: true });
+      buttons.push({
+        ...showButton(item),
+        sub: `Continue watching · ${appName(item.service)}`,
+        primary: true,
+      });
     }
     buttons.push(
       {
         label: "Help me pick",
         icon: "sparkle",
-        disabled: !netflixOn(),
+        disabled: !anyConnected(),
         onSelect: () => show("Coming next: one question, then three posters."),
       },
       {
         label: "Find a show",
         icon: "search",
-        disabled: !netflixOn(),
+        disabled: !anyConnected(),
         onSelect: () => go("find"),
       }
     );
@@ -164,7 +237,7 @@ const screens = {
       greeting: greeting(),
       heading: "What are you in the mood for?",
       buttons,
-      note: netflixOn() ? "" : "No apps are on yet. Look at Something else, then Settings.",
+      note: anyConnected() ? "" : "No apps are on yet. Look at Something else, then Settings.",
       onElse: () => go("more"),
     };
   },
@@ -182,7 +255,7 @@ const screens = {
     buttons: [
       {
         label: "Your apps",
-        sub: netflixOn() ? "Netflix is on" : "No apps on yet",
+        sub: anyConnected() ? `On: ${connectedApps().map(appName).join(", ")}` : "No apps on yet",
         icon: "tv",
         onSelect: () => go("connections"),
       },
@@ -216,6 +289,7 @@ const screens = {
         onSelect: () => {
           search.query = "";
           search.group = null;
+          search.page = 0;
           go("search");
         },
       },
@@ -243,7 +317,6 @@ const screens = {
     let keys;
     if (search.group) {
       keys = [...search.group].map((letter) => ({ label: letter, onSelect: () => addLetter(letter) }));
-      if (search.group === "UVWXYZ") keys.push({ label: "Space", onSelect: () => addLetter(" ") });
     } else {
       keys = LETTER_GROUPS.map((group) => ({
         label: `${group[0]}–${group.at(-1)}`,
@@ -252,7 +325,10 @@ const screens = {
           render();
         },
       }));
-      keys.push({ label: "Delete", icon: "backspace", disabled: !search.query, onSelect: deleteLetter });
+      keys.push(
+        { label: "Space", icon: "space", disabled: !search.query.trim(), onSelect: () => addLetter(" ") },
+        { label: "Delete", icon: "backspace", disabled: !search.query, onSelect: deleteLetter }
+      );
     }
     return {
       heading: "Search by name",
@@ -267,12 +343,27 @@ const screens = {
             render();
           }
         : undefined,
+      // Something else shows the next three matches.
+      onElse:
+        results.pages > 1
+          ? () => {
+              search.page += 1;
+              render();
+            }
+          : null,
     };
   },
 
   playing: (item) => ({
     heading: `Watching ${item.title}`,
-    buttons: [{ label: "Pause / Play", icon: "pause", onSelect: () => tellAdapter("togglePause") }],
+    intro: `On ${appName(item.service)}`,
+    buttons: [
+      {
+        label: "Pause / Play",
+        icon: "pause",
+        onSelect: () => tellAdapter(item.service, "togglePause"),
+      },
+    ],
   }),
 };
 
@@ -301,7 +392,35 @@ function goHome() {
   replace("home");
 }
 
-function makeButton({ label, sub, icon, art, badge, primary, on, disabled, onSelect }) {
+// Selecting fills the button with the accent color for a moment before the
+// action runs, so the person can see their look (or click) counted.
+// "immediate" actions run straight away: Chrome only shows a permission
+// prompt in direct response to the click.
+let selecting = false;
+
+function select(button, action, { immediate = false } = {}) {
+  if (selecting) return;
+  button.classList.add("selected");
+  // Clear the fill afterwards, for actions that stay on the same screen.
+  const run = async () => {
+    try {
+      await action();
+    } finally {
+      button.classList.remove("selected");
+    }
+  };
+  if (immediate) {
+    run();
+    return;
+  }
+  selecting = true;
+  setTimeout(() => {
+    selecting = false;
+    run();
+  }, CONFIRM_MS);
+}
+
+function makeButton({ label, sub, icon, art, badge, primary, on, disabled, immediate, onSelect }) {
   const button = document.createElement("button");
   button.className = ["btn", primary && "primary", on && "on"].filter(Boolean).join(" ");
 
@@ -320,8 +439,11 @@ function makeButton({ label, sub, icon, art, badge, primary, on, disabled, onSel
 
   const text = document.createElement("span");
   text.className = "text";
+  const labelEl = document.createElement("span");
+  labelEl.className = "label";
+  labelEl.textContent = label;
   if (sub && primary) text.append(subEl(sub));
-  text.append(label);
+  text.append(labelEl);
   if (sub && !primary) text.append(subEl(sub));
   button.append(text);
 
@@ -332,7 +454,7 @@ function makeButton({ label, sub, icon, art, badge, primary, on, disabled, onSel
     button.append(badgeEl);
   }
   button.disabled = Boolean(disabled);
-  if (onSelect) button.addEventListener("click", onSelect);
+  if (onSelect) button.addEventListener("click", () => select(button, onSelect, { immediate }));
   return button;
 }
 
@@ -383,10 +505,12 @@ function render() {
   // Back and Something else stay in the same corners on every screen;
   // they're dimmed when a screen has nothing for them to do.
   const onBack = screen.onBack ?? (trail.length ? back : null);
-  backBtn.disabled = !onBack;
-  backBtn.onclick = onBack;
-  elseBtn.disabled = !screen.onElse;
-  elseBtn.onclick = screen.onElse ?? null;
+  const onElse = screen.onElse ?? null;
+  for (const [button, action] of [[backBtn, onBack], [elseBtn, onElse]]) {
+    button.classList.remove("selected");
+    button.disabled = !action;
+    button.onclick = action ? () => select(button, action) : null;
+  }
 }
 
 function show(message) {
@@ -431,15 +555,39 @@ async function activeTab() {
   return tab;
 }
 
+// Apps that need a tab to search (like Netflix) search in a helper tab that
+// Glance keeps inside a collapsed "Glance" tab group: out of sight, and never
+// the tab the person is watching.
+const HELPER_GROUP = "Glance";
+
+async function searchInHelperTab(service, url) {
+  const windowId = (await chrome.windows.getCurrent()).id;
+  const [group] = await chrome.tabGroups.query({ title: HELPER_GROUP, windowId });
+  if (group) {
+    const tabs = await chrome.tabs.query({ groupId: group.id, url: CONNECTIONS[service].origins });
+    const helper = tabs.find((tab) => !tab.active);
+    if (helper) {
+      await chrome.tabs.update(helper.id, { url });
+      return;
+    }
+  }
+  const tab = await chrome.tabs.create({ url, active: false, windowId });
+  const groupId = await chrome.tabs.group(
+    group ? { tabIds: tab.id, groupId: group.id } : { tabIds: tab.id, createProperties: { windowId } }
+  );
+  await chrome.tabGroups.update(groupId, { title: HELPER_GROUP, color: "orange", collapsed: true });
+}
+
 async function play(item) {
   const tab = await activeTab();
-  await chrome.tabs.update(tab.id, { url: `${NETFLIX}/watch/${item.id}` });
+  await chrome.tabs.update(tab.id, { url: CONNECTIONS[item.service].watchUrl(item) });
   chrome.storage.local.set({
     lastWatched: {
-      service: "netflix",
+      service: item.service,
       id: item.id,
       title: item.title,
       image: item.image ?? null,
+      position: item.position ?? null,
       at: Date.now(),
     },
   });
@@ -459,26 +607,63 @@ function deleteLetter() {
   runSearch();
 }
 
-// Show Netflix's results for the query; the adapter reads them back to us.
+// Search every connected app at once.
 async function runSearch() {
+  search.page = 0;
   const query = search.query.trim();
   if (!query) return;
-  const tab = await activeTab();
-  await chrome.tabs.update(tab.id, { url: `${NETFLIX}/search?q=${encodeURIComponent(query)}` });
+  search.startedAt = Date.now();
+  // Show whatever has arrived once the settle time is up.
+  setTimeout(() => current.name === "search" && render(), SETTLE_MS);
+
+  const apps = connectedApps();
+
+  // Apps that can search without a tab (like YouTube) do so directly; their
+  // results are saved just as an adapter would save them. A slow answer for
+  // an earlier spelling is dropped.
+  for (const service of apps.filter((id) => CONNECTIONS[id].fetchResults)) {
+    CONNECTIONS[service]
+      .fetchResults(query)
+      .catch(() => [])
+      .then((items) => {
+        if (search.query.trim() !== query) return;
+        chrome.storage.local.set({ [`${service}.search`]: { query, items, at: Date.now() } });
+      });
+  }
+
+  // The others open their search page in a tab, and their adapter reads the
+  // results back. Searching never touches what's being watched: if the person
+  // is already browsing that app, it searches right there (quick, and the
+  // results are visible); otherwise it uses a hidden helper tab.
+  const tabApps = apps.filter((id) => !CONNECTIONS[id].fetchResults);
+  if (!tabApps.length) return;
+  const active = await activeTab();
+  await Promise.all(
+    tabApps.map(async (service) => {
+      const { site, isWatching, searchUrl } = CONNECTIONS[service];
+      const url = searchUrl(query);
+      if (active?.url?.startsWith(site) && !isWatching(active.url)) {
+        await chrome.tabs.update(active.id, { url });
+      } else {
+        await searchInHelperTab(service, url);
+      }
+    })
+  );
 }
 
-// Send an action to the Netflix adapter running inside the page.
-async function tellAdapter(action) {
+// Send an action to an app's adapter, running inside the current tab.
+async function tellAdapter(service, action) {
+  const { name, site } = CONNECTIONS[service];
   const tab = await activeTab();
-  if (!tab?.url?.startsWith(NETFLIX)) {
-    show("Open Netflix in this tab first.");
+  if (!tab?.url?.startsWith(site)) {
+    show(`Open ${name} in this tab first.`);
     return;
   }
   try {
     const result = await chrome.tabs.sendMessage(tab.id, { action });
     show(result.message);
   } catch {
-    show("Glance isn't connected to this tab yet. Reload the Netflix page and try again.");
+    show(`Glance isn't connected to this tab yet. Reload the ${name} page and try again.`);
   }
 }
 

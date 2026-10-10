@@ -82,9 +82,28 @@
     .btn:hover { border-color: var(--accent); }
     .btn:disabled { opacity: 0.45; cursor: default; border-color: var(--card-edge); }
 
+    /* The moment a choice is made: the whole button fills with the accent. */
+    .btn.selected,
+    footer .btn.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      transform: scale(0.97);
+      transition: transform 120ms ease-out;
+    }
+    .btn.selected .icon,
+    .btn.selected .sub { color: var(--bg); }
+
     .btn .icon { flex: none; width: 30px; height: 30px; color: var(--icon); }
     .btn .text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .btn .sub { font-size: 16px; font-weight: 500; color: var(--muted); }
+    /* Long titles (common on YouTube) stop at two lines. */
+    .btn .label {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
 
     .btn.primary { background: var(--primary-bg); border-color: var(--accent); color: var(--primary-text); }
     .btn.primary .sub { color: var(--primary-sub); }
@@ -179,6 +198,7 @@
     </button>
   </footer>
   <script src="connections.js"></script>
+  <script src="adapters/youtube-search.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

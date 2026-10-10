@@ -1,15 +1,49 @@
 // Connections: the apps Glance works with. Each one needs Chrome's permission
 // for its site, plus its adapter script registered to run there.
 // Shared by the side panel and the background service worker.
+//
+// Adding an app means adding an entry here and writing its adapter. The
+// adapter saves what it reads under keys named after the app's id:
+//   "<id>.connectedAt", "<id>.continueWatching", "<id>.search"
+// An app with fetchResults searches without a tab; the side panel saves its
+// results under "<id>.search" itself.
 
 const CONNECTIONS = {
   netflix: {
     name: "Netflix",
+    icon: "tv",
+    site: "https://www.netflix.com",
     origins: ["https://www.netflix.com/*"],
     home: "https://www.netflix.com/browse",
     script: "adapters/netflix.js",
+    // Shown in setup until the adapter first sees the app's home page.
+    setupHint: "Sign in and pick your profile in the Netflix tab",
+    // Opening a show's watch page makes Netflix resume where you left off.
+    watchUrl: ({ id }) => `https://www.netflix.com/watch/${id}`,
+    isWatching: (url) => new URL(url).pathname.startsWith("/watch"),
+    searchUrl: (query) => `https://www.netflix.com/search?q=${encodeURIComponent(query)}`,
+  },
+  youtube: {
+    name: "YouTube",
+    icon: "play",
+    site: "https://www.youtube.com",
+    origins: ["https://www.youtube.com/*"],
+    home: "https://www.youtube.com/",
+    script: "adapters/youtube.js",
+    setupHint: "Opening YouTube…",
+    // Resume from where you left off, if the adapter noted it.
+    watchUrl: ({ id, position }) =>
+      `https://www.youtube.com/watch?v=${id}` + (position ? `&t=${position}s` : ""),
+    isWatching: (url) => new URL(url).pathname === "/watch",
+    searchUrl: (query) =>
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+    // Searches without opening a tab (see adapters/youtube-search.js).
+    fetchResults: (query) => searchYouTube(query),
   },
 };
+
+// Apps shown in setup as "Coming soon" until their adapters exist.
+const COMING_SOON = [{ name: "Hulu", icon: "tv" }];
 
 async function isAdapterRegistered(id) {
   const scripts = await chrome.scripting.getRegisteredContentScripts({ ids: [id] });

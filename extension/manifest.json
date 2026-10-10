@@ -2,9 +2,9 @@
   "manifest_version": 3,
   "name": "Glance (proof of concept)",
   "version": "0.0.2",
-  "description": "Drive Netflix from a side panel of big buttons.",
-  "permissions": ["sidePanel", "storage", "scripting"],
-  "optional_host_permissions": ["https://www.netflix.com/*"],
+  "description": "Watch shows and videos by eye, from a side panel of big buttons.",
+  "permissions": ["sidePanel", "storage", "scripting", "tabGroups"],
+  "optional_host_permissions": ["https://www.netflix.com/*", "https://www.youtube.com/*"],
   "background": {
     "service_worker": "background.js"
   },
