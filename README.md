@@ -1,40 +1,14 @@
-# EyeGaze
+# Glance
 
-Let people with ALS use apps through Eyegaze in about **3 selections instead of about 25**.
+**Three looks to your favorite show.**
 
-## Screen layout
+Many people living with ALS use an eye-tracker to control their computer. But today's apps are built for fingers and mice. Finding something to watch means navigating menus, search bars and on-screen keyboards, one letter, one look at a time. Every look costs time and energy that should go to the show, not the menus.
 
-- 2–4 huge buttons per screen, with lots of spacing between them.
-- "Back" and "Something else" stay in the same corners on every screen.
-- A rest zone where looking never triggers anything.
-- A big selection counter at the top: "3 selections · regular app: ~25."
+Glance is a layer that sits between the person and their apps. It asks at most one simple question, remembers what they like, and offers a few big, clear choices. **Home → "Funny" → a poster → it's playing.** Three selections instead of dozens.
 
-## Dwell to select
+## How it works
 
-- A fill animation shows on the button you're looking at; looking away cancels it.
-- Dwell time is adjustable, defaulting to about 1 second.
-
-## Flow
-
-1. Home: Continue (based on memory), Watch, YouTube, plus settings.
-2. One question, e.g. "Funny or gripping?"
-3. Three posters, large with titles.
-4. Playing, with gaze controls for pause, back 10s, next episode, and exit.
-
-## Agent rules
-
-- Ask at most one question before showing real options.
-- Memory skips steps whenever it can.
-- Confirm before anything irreversible.
-
-## Build order
-
-1. Dwell buttons plus the flow with hard-coded options.
-2. Netflix adapter (search and play).
-3. Agent generating the questions and options.
-4. Memory and the YouTube adapter.
-5. Final testing on Eyegaze.
-
-## Demo
-
-Home → Funny → poster → playing, with the counter showing 3, then the same flow on YouTube.
+1. **Home**: pick up where you left off, or choose what to watch.
+2. **One question**: for example, "Funny or gripping?"
+3. **Three choices**: big posters with clear titles.
+4. **Playing**: simple eye-gaze controls to pause, rewind, skip or exit.
