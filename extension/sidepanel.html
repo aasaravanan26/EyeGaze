@@ -27,8 +27,10 @@
     }
     main { display: flex; flex-direction: column; gap: 24px; min-height: 0; }
     h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.25; }
+    .intro { margin: -12px 0 0; font-size: 17px; line-height: 1.45; color: var(--muted); }
 
     .btn {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -50,6 +52,21 @@
     .btn.primary { border-color: #3d7a5a; background: #14261e; }
     .btn.primary:hover { border-color: var(--accent); }
     .btn .sub { font-size: 15px; font-weight: 500; color: var(--muted); }
+    .btn .badge {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--edge);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .btn.on { border-color: #3d7a5a; }
+    .btn.on:hover { border-color: var(--accent); }
+    .btn.on .badge { background: var(--accent); color: var(--bg); }
     .btn:disabled { opacity: 0.25; cursor: default; border-color: var(--edge); }
 
     #status { min-height: 1.5em; font-size: 15px; color: var(--muted); }
@@ -75,6 +92,7 @@
     <div class="rest">Rest</div>
     <button id="else" class="btn">Something else ↻</button>
   </footer>
+  <script src="connections.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

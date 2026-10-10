@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Glance (proof of concept)",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Drive Netflix from a side panel of big buttons.",
-  "permissions": ["sidePanel", "storage"],
-  "host_permissions": ["https://www.netflix.com/*"],
+  "permissions": ["sidePanel", "storage", "scripting"],
+  "optional_host_permissions": ["https://www.netflix.com/*"],
   "background": {
     "service_worker": "background.js"
   },
@@ -13,11 +13,5 @@
   },
   "side_panel": {
     "default_path": "sidepanel.html"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://www.netflix.com/*"],
-      "js": ["adapters/netflix.js"]
-    }
-  ]
+  }
 }

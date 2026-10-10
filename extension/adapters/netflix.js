@@ -55,8 +55,17 @@ function readContinueWatching() {
 }
 
 let lastSaved = "";
+let markedConnected = false;
 
 function rememberContinueWatching() {
+  // Rows only appear once someone is signed in and has picked a profile,
+  // so seeing them means Netflix is connected.
+  if (!document.querySelector("section.carousel-row")) return;
+  if (!markedConnected) {
+    markedConnected = true;
+    chrome.storage.local.set({ "netflix.connectedAt": Date.now() });
+  }
+
   const items = readContinueWatching();
   const json = JSON.stringify(items);
   if (!items.length || json === lastSaved) return;
