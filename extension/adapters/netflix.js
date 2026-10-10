@@ -40,16 +40,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // save its first few titles so the side panel can offer them from any page.
 
 // Netflix marks Continue Watching cards as "progress-card". Each one links to
-// /browse?jbv=<show id> and carries the show's name as its aria-label.
+// /browse?jbv=<show id>, carries the show's name as its aria-label, and
+// contains the show's artwork.
 function readContinueWatching() {
   const items = [];
   const seen = new Set();
   for (const card of document.querySelectorAll('a[data-uia="progress-card"]')) {
     const id = new URL(card.href).searchParams.get("jbv");
     const title = card.getAttribute("aria-label");
+    const image = card.querySelector("img")?.src || null;
     if (!id || !title || seen.has(id)) continue;
     seen.add(id);
-    items.push({ id, title });
+    items.push({ id, title, image });
   }
   return items.slice(0, 5);
 }

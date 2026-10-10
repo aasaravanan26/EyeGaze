@@ -2,85 +2,139 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Glance</title>
   <style>
+    /* Warm dark is the default; warm light follows the computer's light mode. */
     :root {
-      --bg: #0b0f17;
-      --panel: #18202f;
-      --edge: #2c3650;
-      --text: #f4f6fb;
-      --muted: #8a96b2;
-      --accent: #7ee2a8;
+      color-scheme: dark;
+      --bg: #2a211c;
+      --card: #3a2f28;
+      --card-edge: #4d3f36;
+      --text: #faf6ef;
+      --muted: #cbbfb4;
+      --accent: #f0997b;
+      --icon: #f0997b;
+      --primary-bg: #4a1b0c;
+      --primary-text: #faece7;
+      --primary-sub: #f5c4b3;
+      --rest-edge: #6b5d53;
+      --rest-text: #b9ada2;
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --bg: #faf6ef;
+        --card: #f1efe8;
+        --card-edge: #d3d1c7;
+        --text: #2c2c2a;
+        --muted: #5f5e5a;
+        --accent: #d85a30;
+        --icon: #993c1d;
+        --primary-bg: #faece7;
+        --primary-text: #4a1b0c;
+        --primary-sub: #993c1d;
+        --rest-edge: #b4b2a9;
+        --rest-text: #5f5e5a;
+      }
+    }
+
     * { box-sizing: border-box; }
     body {
       margin: 0;
       height: 100vh;
       display: grid;
       grid-template-rows: 1fr auto;
-      gap: 24px;
-      padding: 24px 20px;
+      gap: 20px;
+      padding: 22px 18px;
       background: var(--bg);
       color: var(--text);
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       user-select: none;
     }
-    main { display: flex; flex-direction: column; gap: 24px; min-height: 0; }
+    main { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+    .greeting { margin: 0 0 -8px; font-size: 15px; font-weight: 600; color: var(--icon); }
     h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.25; }
-    .intro { margin: -12px 0 0; font-size: 17px; line-height: 1.45; color: var(--muted); }
+    .intro { margin: -8px 0 4px; font-size: 17px; line-height: 1.45; color: var(--muted); }
+    #status { min-height: 1.5em; font-size: 16px; line-height: 1.4; color: var(--muted); }
+
+    /* ---------- Choices ---------- */
 
     .btn {
       position: relative;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 12px;
-      border: 4px solid var(--edge);
+      gap: 16px;
+      padding: 16px 20px;
+      border: 3px solid var(--card-edge);
       border-radius: 20px;
-      background: var(--panel);
+      background: var(--card);
       color: inherit;
       font: inherit;
-      font-size: 22px;
+      font-size: 21px;
       font-weight: 700;
-      text-align: center;
+      text-align: left;
       cursor: pointer;
     }
-    main .btn { flex: 1; min-height: 96px; max-height: 200px; }
+    main .btn { flex: 1; min-height: 88px; }
+    main .btn.primary { flex: 1.4; }
     .btn:hover { border-color: var(--accent); }
-    .btn.primary { border-color: #3d7a5a; background: #14261e; }
-    .btn.primary:hover { border-color: var(--accent); }
-    .btn .sub { font-size: 15px; font-weight: 500; color: var(--muted); }
+    .btn:disabled { opacity: 0.45; cursor: default; border-color: var(--card-edge); }
+
+    .btn .icon { flex: none; width: 30px; height: 30px; color: var(--icon); }
+    .btn .text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .btn .sub { font-size: 16px; font-weight: 500; color: var(--muted); }
+
+    .btn.primary { background: var(--primary-bg); border-color: var(--accent); color: var(--primary-text); }
+    .btn.primary .sub { color: var(--primary-sub); }
+    .btn .art {
+      flex: none;
+      width: 45%;
+      max-width: 170px;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 12px;
+    }
+
+    .btn.on { border-color: var(--accent); }
     .btn .badge {
       position: absolute;
       top: 12px;
       right: 14px;
       padding: 3px 10px;
       border-radius: 999px;
-      background: var(--edge);
+      background: var(--card-edge);
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
-    .btn.on { border-color: #3d7a5a; }
-    .btn.on:hover { border-color: var(--accent); }
     .btn.on .badge { background: var(--accent); color: var(--bg); }
-    .btn:disabled { opacity: 0.25; cursor: default; border-color: var(--edge); }
 
-    #status { min-height: 1.5em; font-size: 15px; color: var(--muted); }
+    /* ---------- Fixed corners + rest zone ---------- */
 
-    footer { display: grid; grid-template-columns: 1fr 0.8fr 1fr; gap: 16px; height: 88px; }
-    footer .btn { font-size: 16px; }
+    footer { display: grid; grid-template-columns: 1fr 0.9fr 1fr; gap: 12px; height: 76px; }
+    footer .btn {
+      justify-content: center;
+      gap: 8px;
+      padding: 8px;
+      border-color: transparent;
+      font-size: 16px;
+      text-align: center;
+      color: var(--muted);
+    }
+    footer .btn .icon { width: 20px; height: 20px; color: inherit; }
     .rest {
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 3px dashed var(--edge);
+      padding: 6px;
+      border: 2px dashed var(--rest-edge);
       border-radius: 20px;
-      color: var(--muted);
-      font-size: 13px;
+      color: var(--rest-text);
+      font-size: 14px;
+      line-height: 1.3;
       text-align: center;
     }
   </style>
@@ -88,9 +142,15 @@
 <body>
   <main id="screen"></main>
   <footer>
-    <button id="back" class="btn">← Back</button>
-    <div class="rest">Rest</div>
-    <button id="else" class="btn">Something else ↻</button>
+    <button id="back" class="btn">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+      Back
+    </button>
+    <div class="rest">Rest your eyes here</div>
+    <button id="else" class="btn">
+      Something else
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
+    </button>
   </footer>
   <script src="connections.js"></script>
   <script src="sidepanel.js"></script>

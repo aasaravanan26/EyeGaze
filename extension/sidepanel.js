@@ -16,6 +16,39 @@ const elseBtn = document.getElementById("else");
 let statusEl;
 let currentScreen;
 
+// Simple line icons, drawn in the current text color.
+const ICONS = {
+  play: '<path d="M7 4v16l13-8z"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  movie:
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
+  tv: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 3l4 4 4-4"/>',
+  next: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  check: '<path d="M5 12l5 5L20 7"/>',
+};
+
+function iconEl(name) {
+  const span = document.createElement("span");
+  span.innerHTML =
+    `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ` +
+    `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+  return span.firstChild;
+}
+
+function subEl(text) {
+  const span = document.createElement("span");
+  span.className = "sub";
+  span.textContent = text;
+  return span;
+}
+
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 // The best guess for "Continue": Netflix's own row first, then our fallback.
 function nextUp() {
   return stored["netflix.continueWatching"]?.items[0] ?? stored.lastWatched ?? null;
@@ -27,7 +60,7 @@ const screens = {
   welcome: () => ({
     heading: "Welcome to Glance",
     intro: "First, let's connect the apps you use. You only need to do this once.",
-    buttons: [{ label: "Set up", primary: true, onSelect: () => go("connections") }],
+    buttons: [{ label: "Set up", icon: "next", primary: true, onSelect: () => go("connections") }],
   }),
 
   connections: () => {
@@ -45,12 +78,13 @@ const screens = {
         {
           label: "Netflix",
           sub,
+          icon: "tv",
           badge: on ? "On" : "Off",
           on,
           onSelect: () => toggleConnection("netflix", on),
         },
-        { label: "YouTube", sub: "Coming soon", badge: "Soon", disabled: true },
-        { label: "Done", onSelect: () => go(stored.setupDone ? "home" : "ready") },
+        { label: "YouTube", sub: "Coming soon", icon: "play", badge: "Soon", disabled: true },
+        { label: "Done", icon: "check", onSelect: () => go(stored.setupDone ? "home" : "ready") },
       ],
       onBack: () => go(stored.setupDone ? "home" : "welcome"),
     };
@@ -59,7 +93,7 @@ const screens = {
   ready: () => ({
     heading: "You're all set",
     intro: "Your choices will appear here as big buttons. Look at one to pick it.",
-    buttons: [{ label: "Start", primary: true, onSelect: finishSetup }],
+    buttons: [{ label: "Start", icon: "next", primary: true, onSelect: finishSetup }],
     onBack: () => go("connections"),
   }),
 
@@ -71,8 +105,10 @@ const screens = {
     const buttons = [];
     if (item) {
       buttons.push({
-        label: `Continue ${item.title}`,
-        sub: "Pick up where you left off",
+        label: item.title,
+        sub: "Continue watching",
+        art: item.image,
+        icon: "play",
         primary: true,
         onSelect: () => continueWatching(item),
       });
@@ -80,15 +116,17 @@ const screens = {
     buttons.push(
       {
         label: "A show or movie",
+        icon: "movie",
         onSelect: () => show("Coming next: one question, then three posters."),
       },
       {
         label: "Videos",
-        sub: "YouTube",
-        onSelect: () => show("YouTube is coming soon."),
+        icon: "play",
+        onSelect: () => show("Videos are coming soon."),
       }
     );
     return {
+      greeting: greeting(),
       heading: "What are you in the mood for?",
       buttons,
       note: netflixOn ? "" : "No apps are on yet. Look at Something else to add one.",
@@ -98,7 +136,7 @@ const screens = {
 
   playing: (item) => ({
     heading: `Watching ${item.title}`,
-    buttons: [{ label: "Pause / Play", onSelect: () => tellAdapter("togglePause") }],
+    buttons: [{ label: "Pause / Play", icon: "pause", onSelect: () => tellAdapter("togglePause") }],
     onBack: () => go("home"),
   }),
 };
@@ -111,9 +149,16 @@ function go(name, arg) {
   currentScreen = name;
   const screen = screens[name](arg);
 
+  const top = [];
+  if (screen.greeting) {
+    const greetingEl = document.createElement("p");
+    greetingEl.className = "greeting";
+    greetingEl.textContent = screen.greeting;
+    top.push(greetingEl);
+  }
   const heading = document.createElement("h1");
   heading.textContent = screen.heading;
-  const top = [heading];
+  top.push(heading);
   if (screen.intro) {
     const intro = document.createElement("p");
     intro.className = "intro";
@@ -121,16 +166,31 @@ function go(name, arg) {
     top.push(intro);
   }
 
-  const buttons = screen.buttons.map(({ label, sub, badge, primary, on, disabled, onSelect }) => {
+  const buttons = screen.buttons.map((spec) => {
+    const { label, sub, icon, art, badge, primary, on, disabled, onSelect } = spec;
     const button = document.createElement("button");
     button.className = ["btn", primary && "primary", on && "on"].filter(Boolean).join(" ");
-    button.textContent = label;
-    if (sub) {
-      const subEl = document.createElement("span");
-      subEl.className = "sub";
-      subEl.textContent = sub;
-      button.append(subEl);
+
+    // Artwork when we have it (falling back to the icon if it fails to load).
+    const iconNode = icon ? iconEl(icon) : null;
+    if (art) {
+      const img = document.createElement("img");
+      img.className = "art";
+      img.src = art;
+      img.alt = "";
+      img.addEventListener("error", () => img.replaceWith(iconNode ?? ""));
+      button.append(img);
+    } else if (iconNode) {
+      button.append(iconNode);
     }
+
+    const text = document.createElement("span");
+    text.className = "text";
+    if (sub && primary) text.append(subEl(sub));
+    text.append(label);
+    if (sub && !primary) text.append(subEl(sub));
+    button.append(text);
+
     if (badge) {
       const badgeEl = document.createElement("span");
       badgeEl.className = "badge";
@@ -189,7 +249,13 @@ async function continueWatching(item) {
   const tab = await activeTab();
   await chrome.tabs.update(tab.id, { url: `${NETFLIX}/watch/${item.id}` });
   chrome.storage.local.set({
-    lastWatched: { service: "netflix", id: item.id, title: item.title, at: Date.now() },
+    lastWatched: {
+      service: "netflix",
+      id: item.id,
+      title: item.title,
+      image: item.image ?? null,
+      at: Date.now(),
+    },
   });
   go("playing", item);
 }
