@@ -1,22 +1,7 @@
-// Netflix adapter: runs inside netflix.com and performs actions on the page.
+// Netflix adapter: runs inside netflix.com, performs actions on the page, and
+// saves what it reads (Continue Watching, search results) for the side panel.
 
 const actions = {
-  playFirstResult() {
-    // Show links look like /watch/<id>, /title/<id> or /browse?jbv=<id>.
-    // Skip the header's menus (e.g. notifications), which also link to shows.
-    const SHOW_ID = /(?:\/(?:watch|title)\/|[?&]jbv=)(\d+)/;
-    const links = document.querySelectorAll('a[href]:not([data-uia^="navigation"])');
-    const link = [...links].find((a) =>
-      SHOW_ID.test(a.getAttribute("href"))
-    );
-    if (!link) {
-      return { ok: false, message: "No search results found on this page." };
-    }
-    const id = link.getAttribute("href").match(SHOW_ID)[1];
-    location.assign(`/watch/${id}`);
-    return { ok: true, message: `Opening title ${id}…` };
-  },
-
   togglePause() {
     const video = document.querySelector("video");
     if (!video) {
@@ -36,8 +21,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   sendResponse(action ? action() : { ok: false, message: `Unknown action: ${message.action}` });
 });
 
-// Memory: whenever the Netflix home page shows the "Continue Watching" row,
-// save its first few titles so the side panel can offer them from any page.
+// ---------- Continue Watching (home page) ----------
 
 // Netflix marks Continue Watching cards as "progress-card". Each one links to
 // /browse?jbv=<show id>, carries the show's name as its aria-label, and
@@ -56,7 +40,7 @@ function readContinueWatching() {
   return items.slice(0, 5);
 }
 
-let lastSaved = "";
+let lastSavedContinue = "";
 let markedConnected = false;
 
 function rememberContinueWatching() {
@@ -70,20 +54,60 @@ function rememberContinueWatching() {
 
   const items = readContinueWatching();
   const json = JSON.stringify(items);
-  if (!items.length || json === lastSaved) return;
-  lastSaved = json;
+  if (!items.length || json === lastSavedContinue) return;
+  lastSavedContinue = json;
   chrome.storage.local.set({
     "netflix.continueWatching": { items, updatedAt: Date.now() },
   });
 }
 
-// Netflix loads rows after the page itself, so check again whenever the
-// home page changes (waiting a moment for it to settle).
+// ---------- Search results (search page) ----------
+
+// Show links look like /watch/<id>, /title/<id> or ...?jbv=<id>. Skip the
+// header's menus (e.g. notifications), which also link to shows.
+const SHOW_ID = /(?:\/(?:watch|title)\/|[?&]jbv=)(\d+)/;
+
+function readSearchResults() {
+  const items = [];
+  const seen = new Set();
+  for (const link of document.querySelectorAll('a[href]:not([data-uia^="navigation"])')) {
+    const match = link.getAttribute("href").match(SHOW_ID);
+    const img = link.querySelector("img");
+    const title = link.getAttribute("aria-label") || img?.alt || link.textContent.trim();
+    if (!match || !title || seen.has(match[1])) continue;
+    seen.add(match[1]);
+    items.push({ id: match[1], title, image: img?.src || null });
+    if (items.length === 3) break;
+  }
+  return items;
+}
+
+let lastSavedSearch = "";
+
+function rememberSearchResults() {
+  const query = new URLSearchParams(location.search).get("q");
+  if (!query) return;
+  const items = readSearchResults();
+  const json = JSON.stringify({ query, items });
+  if (json === lastSavedSearch) return;
+  lastSavedSearch = json;
+  chrome.storage.local.set({ "netflix.search": { query, items, at: Date.now() } });
+}
+
+// ---------- Watching for changes ----------
+
+// Netflix loads its content after the page itself, so read again whenever
+// the page changes (waiting a moment for it to settle).
+function readCurrentPage() {
+  if (location.pathname.startsWith("/browse")) rememberContinueWatching();
+  else if (location.pathname.startsWith("/search")) rememberSearchResults();
+}
+
 let settleTimer;
 new MutationObserver(() => {
-  if (!location.pathname.startsWith("/browse")) return;
+  if (!/^\/(browse|search)/.test(location.pathname)) return;
   clearTimeout(settleTimer);
-  settleTimer = setTimeout(rememberContinueWatching, 1000);
+  settleTimer = setTimeout(readCurrentPage, 800);
 }).observe(document.body, { childList: true, subtree: true });
 
-if (location.pathname.startsWith("/browse")) rememberContinueWatching();
+readCurrentPage();
