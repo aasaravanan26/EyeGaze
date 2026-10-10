@@ -12,3 +12,9 @@ Glance is a layer that sits between the person and their apps. It asks at most o
 2. **One question**: for example, "Funny or gripping?"
 3. **Three choices**: big posters with clear titles.
 4. **Playing**: simple eye-gaze controls to pause, rewind, skip or exit.
+
+## Memory
+
+Glance remembers what you like so the right choice is usually the first one you see, like picking up your show in a single look. It only ever reorders your options, never chooses for you, and everything stays on your own device. You can see what Glance has learned, clear it, or watch something without it being remembered, all by eye.
+
+→ [How does Glance memory work?](docs/memory.md)
