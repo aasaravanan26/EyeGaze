@@ -127,6 +127,21 @@
     }
     .btn.on .badge { background: var(--accent); color: var(--bg); }
 
+    /* ---------- Typed once, during setup ---------- */
+
+    .field {
+      min-height: 60px;
+      padding: 0 18px;
+      border: 3px solid var(--card-edge);
+      border-radius: 16px;
+      background: var(--card);
+      color: var(--text);
+      font: inherit;
+      font-size: 20px;
+      outline: none;
+    }
+    .field:focus { border-color: var(--accent); }
+
     /* ---------- Search by name ---------- */
 
     .query {
@@ -207,6 +222,7 @@
   </footer>
   <script src="connections.js"></script>
   <script src="adapters/youtube-search.js"></script>
+  <script src="agent.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

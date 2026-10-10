@@ -8,13 +8,21 @@
 //   "<app>.continueWatching": the app's own "continue" list, read by its adapter
 //   "<app>.search": the app's latest search results, read by its adapter
 //   "lastWatched": the last thing Glance started playing, e.g. { service, id, ... }
+//   "apiKey": the OpenRouter key that powers Help me pick (see agent.js)
 let stored = {};
+
+// The agent suggests titles for Help me pick. Everything else is fixed.
+const agent = new Agent();
+const MOODS = ["Funny", "Gripping", "Relaxing", "Surprise me"];
+// The suggestions on show, so Back can return to them without asking again.
+const suggest = { mood: "", items: [], loading: false, error: "", request: 0 };
 
 const screenEl = document.getElementById("screen");
 const backBtn = document.getElementById("back");
 const homeBtn = document.getElementById("home");
 const elseBtn = document.getElementById("else");
 let statusEl;
+let fieldEl;
 
 // Navigation: the screen on show, plus the trail of screens that led here.
 // Back always returns along the trail.
@@ -279,7 +287,7 @@ const screens = {
         label: "Help me pick",
         icon: "sparkle",
         disabled: !anyConnected(),
-        onSelect: () => show("Coming next: one question, then three posters."),
+        onSelect: () => (agent.hasKey ? go("pick") : go("aiKey")),
       },
       {
         label: "Find a show",
@@ -314,9 +322,62 @@ const screens = {
         icon: "tv",
         onSelect: () => go("connections"),
       },
+      {
+        label: "Help me pick",
+        sub: agent.hasKey ? "✓ AI key saved" : "Needs an AI key",
+        icon: "sparkle",
+        onSelect: () => go("aiKey"),
+      },
       { label: "What Glance remembers", sub: "Coming soon", icon: "clock", disabled: true },
     ],
   }),
+
+  // Help me pick needs a key for the AI service. This is typed once, by
+  // whoever sets Glance up; everything after that works by eye.
+  aiKey: () => ({
+    heading: "Help me pick",
+    intro: agent.hasKey
+      ? "Your AI key is saved. Paste a new one to replace it."
+      : "Help me pick uses an AI service to suggest shows. Paste an OpenRouter key to turn it on.",
+    field: { placeholder: "sk-or-…" },
+    buttons: [
+      { label: "Save key", icon: "check", primary: true, onSelect: saveApiKey },
+      { label: "Remove key", disabled: !agent.hasKey, onSelect: clearApiKey },
+    ],
+  }),
+
+  // Help me pick: one question, then three suggestions. Picking one runs
+  // the normal search, so the real posters appear and nothing plays until
+  // the person chooses it.
+  pick: () => ({
+    heading: "What are you in the mood for?",
+    buttons: MOODS.map((mood) => ({
+      label: mood,
+      icon: "sparkle",
+      onSelect: () => startSuggestions(mood),
+    })),
+  }),
+
+  suggest: () => {
+    let note = "";
+    if (suggest.loading) note = "Thinking…";
+    else if (suggest.error) note = suggest.error;
+    else if (suggest.items.length) note = "Something else asks for three more.";
+    const buttons = suggest.error
+      ? [{ label: "Try again", icon: "next", onSelect: () => fetchSuggestions(agent.retry()) }]
+      : suggest.items.map((item) => ({
+          label: item.title,
+          sub: [item.why, item.app].filter(Boolean).join(" · "),
+          icon: "search",
+          onSelect: () => searchFor(item.title),
+        }));
+    return {
+      heading: suggest.mood === "Surprise me" ? "Three surprises" : `Something ${suggest.mood.toLowerCase()}`,
+      buttons,
+      note,
+      onElse: suggest.loading || suggest.error ? null : () => fetchSuggestions(agent.more()),
+    };
+  },
 
   // Asks before doing something the person might not mean to do. The safe
   // choice comes first and is highlighted, so a stray look changes nothing.
@@ -536,6 +597,17 @@ function render() {
     parts.push(intro);
   }
 
+  if (screen.field) {
+    fieldEl = document.createElement("input");
+    fieldEl.className = "field";
+    fieldEl.type = "password";
+    fieldEl.placeholder = screen.field.placeholder ?? "";
+    fieldEl.autocomplete = "off";
+    parts.push(fieldEl);
+  } else {
+    fieldEl = null;
+  }
+
   if (screen.query !== undefined) {
     const query = document.createElement("div");
     query.className = "query";
@@ -669,6 +741,72 @@ async function play(item) {
   go("playing", item);
 }
 
+// ---------- Help me pick ----------
+
+async function saveApiKey() {
+  const key = fieldEl?.value.trim();
+  if (!key) {
+    show("Paste a key first.");
+    return;
+  }
+  agent.setApiKey(key);
+  await chrome.storage.local.set({ apiKey: key });
+  back();
+}
+
+async function clearApiKey() {
+  agent.setApiKey("");
+  await chrome.storage.local.remove("apiKey");
+  render();
+}
+
+function startSuggestions(mood) {
+  suggest.mood = mood;
+  suggest.items = [];
+  suggest.error = "";
+  const context = {
+    apps: connectedApps().map(appName),
+    started: startedShows().slice(0, 8).map((show) => show.title),
+  };
+  go("suggest");
+  fetchSuggestions(agent.reset(buildPickPrompt(mood, context)));
+}
+
+// Ask the agent (whose next message has already been queued) and show what
+// comes back. A reply for a screen the person has left is dropped.
+async function fetchSuggestions() {
+  const request = ++suggest.request;
+  suggest.loading = true;
+  suggest.error = "";
+  render();
+  try {
+    const items = await agent.step();
+    if (request !== suggest.request) return;
+    suggest.items = items;
+  } catch (error) {
+    if (request !== suggest.request) return;
+    suggest.items = [];
+    suggest.error = /API 401/.test(error.message)
+      ? "That AI key didn't work. Check it in Settings."
+      : "Couldn't get suggestions right now.";
+    console.error("[Glance] suggestions failed", error);
+  } finally {
+    if (request === suggest.request) {
+      suggest.loading = false;
+      if (current.name === "suggest") render();
+    }
+  }
+}
+
+// Search every connected app for a title, as if it had been spelled out.
+function searchFor(title) {
+  search.query = title;
+  search.group = null;
+  search.page = 0;
+  go("search");
+  runSearch();
+}
+
 function addLetter(letter) {
   search.query += letter;
   search.group = null;
@@ -749,10 +887,11 @@ async function tellAdapter(service, action) {
 chrome.storage.onChanged.addListener(async (_changes, area) => {
   if (area !== "local") return;
   stored = await chrome.storage.local.get();
-  if (current && current.name !== "playing") render();
+  if (current && !["playing", "aiKey"].includes(current.name)) render();
 });
 
 chrome.storage.local.get().then((data) => {
   stored = data;
+  if (stored.apiKey) agent.setApiKey(stored.apiKey);
   replace(stored.setupDone ? "home" : "welcome");
 });
