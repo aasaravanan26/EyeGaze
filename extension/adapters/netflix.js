@@ -2,13 +2,17 @@
 
 const actions = {
   playFirstResult() {
-    const link = [...document.querySelectorAll("a[href]")].find((a) =>
-      /\/(watch|title)\/\d+/.test(a.getAttribute("href"))
+    // Show links look like /watch/<id>, /title/<id> or /browse?jbv=<id>.
+    // Skip the header's menus (e.g. notifications), which also link to shows.
+    const SHOW_ID = /(?:\/(?:watch|title)\/|[?&]jbv=)(\d+)/;
+    const links = document.querySelectorAll('a[href]:not([data-uia^="navigation"])');
+    const link = [...links].find((a) =>
+      SHOW_ID.test(a.getAttribute("href"))
     );
     if (!link) {
       return { ok: false, message: "No search results found on this page." };
     }
-    const id = link.getAttribute("href").match(/\/(?:watch|title)\/(\d+)/)[1];
+    const id = link.getAttribute("href").match(SHOW_ID)[1];
     location.assign(`/watch/${id}`);
     return { ok: true, message: `Opening title ${id}…` };
   },
@@ -35,20 +39,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // Memory: whenever the Netflix home page shows the "Continue Watching" row,
 // save its first few titles so the side panel can offer them from any page.
 
+// Netflix marks Continue Watching cards as "progress-card". Each one links to
+// /browse?jbv=<show id> and carries the show's name as its aria-label.
 function readContinueWatching() {
-  const row = document.querySelector('[data-list-context="continueWatching"]');
-  if (!row) return [];
-
   const items = [];
   const seen = new Set();
-  for (const link of row.querySelectorAll("a[href]")) {
-    const match = link.getAttribute("href").match(/\/(?:watch|title)\/(\d+)/);
-    const title =
-      link.getAttribute("aria-label") ||
-      link.querySelector(".fallback-text")?.textContent.trim();
-    if (!match || !title || seen.has(match[1])) continue;
-    seen.add(match[1]);
-    items.push({ id: match[1], title });
+  for (const card of document.querySelectorAll('a[data-uia="progress-card"]')) {
+    const id = new URL(card.href).searchParams.get("jbv");
+    const title = card.getAttribute("aria-label");
+    if (!id || !title || seen.has(id)) continue;
+    seen.add(id);
+    items.push({ id, title });
   }
   return items.slice(0, 5);
 }

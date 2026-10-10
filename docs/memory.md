@@ -50,7 +50,7 @@ Glance is early, and memory is being built step by step.
 
 | Feature | Status |
 |---|---|
-| "Continue" from Netflix's Continue Watching row | ✅ Built, being tested |
+| "Continue" from Netflix's Continue Watching row | ✅ Built |
 | Remembering the last thing Glance played | ✅ Built, being tested |
 | Mood, time-of-day and app preferences | Planned, arriving with the question screen |
 | Passed-on shows | Planned |
