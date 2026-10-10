@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Glance (proof of concept)",
+  "name": "Glance",
   "version": "0.0.2",
   "description": "Watch shows and videos by eye, from a side panel of big buttons.",
   "permissions": ["sidePanel", "storage", "scripting", "tabGroups"],
