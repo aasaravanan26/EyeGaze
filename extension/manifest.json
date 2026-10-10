@@ -3,7 +3,7 @@
   "name": "Glance (proof of concept)",
   "version": "0.0.1",
   "description": "Drive Netflix from a side panel of big buttons.",
-  "permissions": ["sidePanel"],
+  "permissions": ["sidePanel", "storage"],
   "host_permissions": ["https://www.netflix.com/*"],
   "background": {
     "service_worker": "background.js"

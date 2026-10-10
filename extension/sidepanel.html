@@ -4,41 +4,77 @@
   <meta charset="utf-8">
   <title>Glance</title>
   <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #18202f;
+      --edge: #2c3650;
+      --text: #f4f6fb;
+      --muted: #8a96b2;
+      --accent: #7ee2a8;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 24px;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 24px;
+      padding: 24px 20px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+    }
+    main { display: flex; flex-direction: column; gap: 24px; min-height: 0; }
+    h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.25; }
+
+    .btn {
       display: flex;
       flex-direction: column;
-      gap: 24px;
-      min-height: 100vh;
-      box-sizing: border-box;
-      background: #0b0f17;
-      color: #f4f6fb;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    }
-    h1 { margin: 0; font-size: 22px; color: #7ee2a8; }
-    button {
-      flex: 1;
-      max-height: 160px;
-      border: 4px solid #2c3650;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px;
+      border: 4px solid var(--edge);
       border-radius: 20px;
-      background: #18202f;
+      background: var(--panel);
       color: inherit;
       font: inherit;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
+      text-align: center;
       cursor: pointer;
     }
-    button:hover { border-color: #7ee2a8; }
-    #status { min-height: 3em; font-size: 16px; color: #8a96b2; }
+    main .btn { flex: 1; min-height: 96px; max-height: 200px; }
+    .btn:hover { border-color: var(--accent); }
+    .btn.primary { border-color: #3d7a5a; background: #14261e; }
+    .btn.primary:hover { border-color: var(--accent); }
+    .btn .sub { font-size: 15px; font-weight: 500; color: var(--muted); }
+    .btn:disabled { opacity: 0.25; cursor: default; border-color: var(--edge); }
+
+    #status { min-height: 1.5em; font-size: 15px; color: var(--muted); }
+
+    footer { display: grid; grid-template-columns: 1fr 0.8fr 1fr; gap: 16px; height: 88px; }
+    footer .btn { font-size: 16px; }
+    .rest {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px dashed var(--edge);
+      border-radius: 20px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <h1>Glance</h1>
-  <button id="search">Search Netflix</button>
-  <button id="play">Play first result</button>
-  <button id="pause">Pause / Play</button>
-  <div id="status">Ready.</div>
+  <main id="screen"></main>
+  <footer>
+    <button id="back" class="btn">← Back</button>
+    <div class="rest">Rest</div>
+    <button id="else" class="btn">Something else ↻</button>
+  </footer>
   <script src="sidepanel.js"></script>
 </body>
 </html>
