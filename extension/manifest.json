@@ -4,6 +4,7 @@
   "version": "0.0.2",
   "description": "Watch shows and videos by eye, from a side panel of big buttons.",
   "permissions": ["sidePanel", "storage", "scripting", "tabGroups"],
+  "host_permissions": ["https://openrouter.ai/*"],
   "optional_host_permissions": ["https://www.netflix.com/*", "https://www.youtube.com/*"],
   "background": {
     "service_worker": "background.js"
