@@ -18,8 +18,6 @@
       --primary-bg: #4a1b0c;
       --primary-text: #faece7;
       --primary-sub: #f5c4b3;
-      --rest-edge: #6b5d53;
-      --rest-text: #b9ada2;
     }
     @media (prefers-color-scheme: light) {
       :root {
@@ -34,8 +32,6 @@
         --primary-bg: #faece7;
         --primary-text: #4a1b0c;
         --primary-sub: #993c1d;
-        --rest-edge: #b4b2a9;
-        --rest-text: #5f5e5a;
       }
     }
 
@@ -145,21 +141,42 @@
       letter-spacing: 0.08em;
       white-space: pre;
     }
+    .query .icon { flex: none; width: 26px; height: 26px; margin-right: 12px; color: var(--icon); }
     .query::after { content: ""; width: 3px; height: 32px; margin-left: 4px; background: var(--accent); }
-    .query.empty { font-size: 18px; font-weight: 500; letter-spacing: 0; color: var(--muted); }
-    .query.empty::after { order: -1; margin: 0 8px 0 0; }
 
-    .keys { flex: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
-    .keys .btn { justify-content: center; min-height: 0; padding: 8px; font-size: 24px; }
-    .keys .btn .icon { width: 26px; height: 26px; }
+    /* The letter keys take all the remaining height, which never changes. */
+    .keys { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
+    .keys.wide { grid-template-columns: 1fr 1fr 1fr; }
+    .keys .btn { justify-content: center; min-height: 0; padding: 8px; font-size: 28px; }
+    .keys .btn .icon { width: 28px; height: 28px; }
 
-    /* Results stay compact so the letter keys keep most of the space. */
-    main[data-screen="search"] > .btn { flex: 0 0 auto; min-height: 64px; padding: 8px 14px; font-size: 19px; }
-    main[data-screen="search"] .art { width: 84px; }
+    /* Results area: always room for three compact results, whether it holds
+       results, a "searching" message, or nothing yet, so nothing below moves. */
+    .results { flex: 0 0 auto; height: 182px; display: flex; flex-direction: column; gap: 8px; }
+    .results .btn { flex: 0 0 auto; height: 55px; min-height: 0; padding: 6px 14px; font-size: 18px; }
+    .results .btn .label { -webkit-line-clamp: 1; }
+    .results .btn .sub { font-size: 14px; }
+    .results .art { width: 72px; }
+    .results .message {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 20px;
+      border: 2px dashed var(--card-edge);
+      border-radius: 16px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.4;
+      text-align: center;
+    }
+    main[data-screen="search"] { gap: 12px; }
+    /* The search screen has no status text; give its line to the keys. */
+    main[data-screen="search"] #status { display: none; }
 
-    /* ---------- Fixed corners + rest zone ---------- */
+    /* ---------- Back, Home and Something else: same place on every screen ---------- */
 
-    footer { display: grid; grid-template-columns: 1fr 0.9fr 1fr; gap: 12px; height: 76px; }
+    footer { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; height: 76px; }
     footer .btn {
       justify-content: center;
       gap: 8px;
@@ -170,18 +187,6 @@
       color: var(--muted);
     }
     footer .btn .icon { width: 20px; height: 20px; color: inherit; }
-    .rest {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 6px;
-      border: 2px dashed var(--rest-edge);
-      border-radius: 20px;
-      color: var(--rest-text);
-      font-size: 14px;
-      line-height: 1.3;
-      text-align: center;
-    }
   </style>
 </head>
 <body>
@@ -191,7 +196,10 @@
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
       Back
     </button>
-    <div class="rest">Rest your eyes here</div>
+    <button id="home" class="btn">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/></svg>
+      Home
+    </button>
     <button id="else" class="btn">
       Something else
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>

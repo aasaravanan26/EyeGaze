@@ -12,6 +12,7 @@ let stored = {};
 
 const screenEl = document.getElementById("screen");
 const backBtn = document.getElementById("back");
+const homeBtn = document.getElementById("home");
 const elseBtn = document.getElementById("else");
 let statusEl;
 
@@ -23,15 +24,22 @@ const trail = [];
 // Search by name: letters are picked in two looks (a group, then a letter).
 // Four groups plus Space and Delete make six big keys.
 const LETTER_GROUPS = ["ABCDEF", "GHIJKL", "MNOPQR", "STUVWXYZ"];
-const search = { query: "", group: null, startedAt: 0, page: 0 };
+const search = {
+  query: "",
+  group: null,
+  startedAt: 0,
+  page: 0,
+  // The results on screen for a spelling, kept stable as late matches arrive.
+  shown: { query: null, items: [] },
+};
 
 // Results are shown three at a time; Something else shows the next three.
 const PAGE_SIZE = 3;
 
-// Results from several apps arrive at different times. Wait this long for
-// all of them before showing the list, so it doesn't reshuffle under the
-// person's eyes.
-const SETTLE_MS = 1500;
+// Results from several apps arrive at different times. Wait for all of them
+// (but no longer than this) before showing the list, so one fast app doesn't
+// claim the screen and the list doesn't reshuffle under the person's eyes.
+const SETTLE_MS = 4000;
 
 // A selection shows a brief confirmation fill before anything happens.
 const CONFIRM_MS = 180;
@@ -105,44 +113,91 @@ function startedShows() {
   return shows.sort((a, b) => b.seenAt - a.seenAt);
 }
 
-// Search results from every connected app, merged: take each app's #1, then
-// each app's #2, and so on; skip titles already found in a preferred app;
-// and put titles that start with what's been spelled first.
+// Search results from every connected app, merged for "Find a show":
+// - Shows (streaming apps) come before videos (YouTube), which always has
+//   something for any spelling and would otherwise crowd shows out. Each page
+//   of three holds two shows and one video, topping up from the other kind
+//   when one runs out.
+// - Within each kind, apps take turns (each app's #1, then each #2, ...), and
+//   titles that start with what's been spelled come first.
+// - A title already found in a preferred app is skipped.
+function mergeResults(query, ready) {
+  const startsWithQuery = (item) => item.title.toLowerCase().startsWith(query.toLowerCase());
+  const ofKind = (kind) => {
+    const lists = ready
+      .filter(({ service }) => (CONNECTIONS[service].kind ?? "shows") === kind)
+      .map(({ service, saved }) => saved.items.map((item) => ({ ...item, service })));
+    const turns = [];
+    const longest = Math.max(0, ...lists.map((list) => list.length));
+    for (let rank = 0; rank < longest; rank++) {
+      for (const list of lists) if (list[rank]) turns.push(list[rank]);
+    }
+    return turns.sort((a, b) => startsWithQuery(b) - startsWithQuery(a));
+  };
+  const shows = ofKind("shows");
+  const videos = ofKind("videos");
+
+  const merged = [];
+  const titles = new Set();
+  const take = (list) => {
+    while (list.length) {
+      const item = list.shift();
+      const key = item.title.toLowerCase();
+      if (titles.has(key)) continue;
+      titles.add(key);
+      return item;
+    }
+    return null;
+  };
+  while (shows.length || videos.length) {
+    for (const [first, fallback] of [[shows, videos], [shows, videos], [videos, shows]]) {
+      const item = take(first) ?? take(fallback);
+      if (item) merged.push(item);
+    }
+  }
+  return merged;
+}
+
+// What the search screen shows: the results for this page, or a short
+// message for the results area when there are none. Once results are on
+// screen they stay put: matches that arrive later (if an app answers after
+// the wait is over) are slotted in right after the page being looked at, so
+// the next Something else shows them, instead of replacing or reshuffling
+// what the person is looking at.
 function searchResults() {
   const query = search.query.trim();
-  if (!query) return { items: [], note: "Spell the name one letter at a time. Matches appear here." };
+  if (!query) return { items: [], message: "" };
 
   const apps = connectedApps();
   const ready = apps
     .map((service) => ({ service, saved: stored[`${service}.search`] }))
     .filter(({ saved }) => saved?.query === query);
   const waiting = apps.length - ready.length;
-  const searchingNote = apps.length === 1 ? `Searching ${appName(apps[0])}…` : "Searching your apps…";
-  if (waiting && Date.now() - search.startedAt < SETTLE_MS) return { items: [], note: searchingNote };
+  if (waiting && Date.now() - search.startedAt < SETTLE_MS) return { items: [], message: "Searching…" };
 
-  const merged = [];
-  const titles = new Set();
-  const longest = Math.max(...ready.map(({ saved }) => saved.items.length), 0);
-  for (let rank = 0; rank < longest; rank++) {
-    for (const { service, saved } of ready) {
-      const item = saved.items[rank];
-      const key = item?.title.toLowerCase();
-      if (!item || titles.has(key)) continue;
-      titles.add(key);
-      merged.push({ ...item, service });
+  const merged = mergeResults(query, ready);
+  const shown = search.shown;
+  if (shown.query !== query) {
+    if (merged.length) search.shown = { query, items: merged };
+  } else {
+    const keys = new Set(shown.items.map((item) => `${item.service}:${item.id}`));
+    const titles = new Set(shown.items.map((item) => item.title.toLowerCase()));
+    const late = merged.filter(
+      (item) => !keys.has(`${item.service}:${item.id}`) && !titles.has(item.title.toLowerCase())
+    );
+    if (late.length) {
+      const visibleEnd = ((search.page % Math.ceil(shown.items.length / PAGE_SIZE)) + 1) * PAGE_SIZE;
+      shown.items.splice(visibleEnd, 0, ...late);
     }
   }
-  const startsWithQuery = (item) => item.title.toLowerCase().startsWith(query.toLowerCase());
-  merged.sort((a, b) => startsWithQuery(b) - startsWithQuery(a));
 
-  if (!merged.length) {
-    return { items: [], pages: 0, note: waiting ? searchingNote : "No matches yet. Add another letter." };
+  const items = search.shown.query === query ? search.shown.items : [];
+  if (!items.length) {
+    return { items: [], pages: 0, message: waiting ? "Searching…" : "No matches yet" };
   }
-  const pages = Math.ceil(merged.length / PAGE_SIZE);
+  const pages = Math.ceil(items.length / PAGE_SIZE);
   const page = search.page % pages;
-  let note = waiting ? "Still searching…" : "";
-  if (pages > 1) note = `Page ${page + 1} of ${pages}. Something else shows more.`;
-  return { items: merged.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), pages, note };
+  return { items: items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), pages };
 }
 
 const showButton = (item) => ({
@@ -331,11 +386,12 @@ const screens = {
       );
     }
     return {
-      heading: "Search by name",
+      // No heading here: the query bar says what to do, and the keys get the room.
       query: search.query,
-      buttons: results.items.map(showButton),
+      buttons: [],
+      // The results area is always the same size, so the keys never move.
+      results: { items: results.items.map(showButton), message: results.message },
       keys,
-      note: results.note,
       // While picking a letter, Back returns to the letter groups.
       onBack: search.group
         ? () => {
@@ -468,9 +524,11 @@ function render() {
     greetingEl.textContent = screen.greeting;
     parts.push(greetingEl);
   }
-  const heading = document.createElement("h1");
-  heading.textContent = screen.heading;
-  parts.push(heading);
+  if (screen.heading) {
+    const heading = document.createElement("h1");
+    heading.textContent = screen.heading;
+    parts.push(heading);
+  }
   if (screen.intro) {
     const intro = document.createElement("p");
     intro.className = "intro";
@@ -480,16 +538,31 @@ function render() {
 
   if (screen.query !== undefined) {
     const query = document.createElement("div");
-    query.className = screen.query ? "query" : "query empty";
-    query.textContent = screen.query || "Spell the name…";
+    query.className = "query";
+    query.append(iconEl("search"), screen.query);
     parts.push(query);
   }
 
   parts.push(...screen.buttons.map(makeButton));
 
+  if (screen.results) {
+    const results = document.createElement("div");
+    results.className = "results";
+    if (screen.results.items.length) {
+      results.append(...screen.results.items.map(makeButton));
+    } else {
+      const message = document.createElement("div");
+      message.className = "message";
+      message.textContent = screen.results.message;
+      results.append(message);
+    }
+    parts.push(results);
+  }
+
   if (screen.keys) {
     const keys = document.createElement("div");
-    keys.className = "keys";
+    // Longer letter groups use three columns, keeping keys closer to square.
+    keys.className = screen.keys.length > 6 ? "keys wide" : "keys";
     keys.append(...screen.keys.map(makeButton));
     parts.push(keys);
   }
@@ -502,11 +575,13 @@ function render() {
   screenEl.dataset.screen = current.name;
   screenEl.replaceChildren(...parts);
 
-  // Back and Something else stay in the same corners on every screen;
-  // they're dimmed when a screen has nothing for them to do.
+  // Back, Home and Something else stay in the same place on every screen;
+  // they're dimmed when a screen has nothing for them to do. Home keeps the
+  // trail, so Back after an accidental Home returns to where you were.
   const onBack = screen.onBack ?? (trail.length ? back : null);
+  const onHome = stored.setupDone && current.name !== "home" ? () => go("home") : null;
   const onElse = screen.onElse ?? null;
-  for (const [button, action] of [[backBtn, onBack], [elseBtn, onElse]]) {
+  for (const [button, action] of [[backBtn, onBack], [homeBtn, onHome], [elseBtn, onElse]]) {
     button.classList.remove("selected");
     button.disabled = !action;
     button.onclick = action ? () => select(button, action) : null;

@@ -16,6 +16,8 @@ const CONNECTIONS = {
     origins: ["https://www.netflix.com/*"],
     home: "https://www.netflix.com/browse",
     script: "adapters/netflix.js",
+    // "shows" (streaming apps) or "videos" (YouTube): search lists shows first.
+    kind: "shows",
     // Shown in setup until the adapter first sees the app's home page.
     setupHint: "Sign in and pick your profile in the Netflix tab",
     // Opening a show's watch page makes Netflix resume where you left off.
@@ -30,6 +32,7 @@ const CONNECTIONS = {
     origins: ["https://www.youtube.com/*"],
     home: "https://www.youtube.com/",
     script: "adapters/youtube.js",
+    kind: "videos",
     setupHint: "Opening YouTube…",
     // Resume from where you left off, if the adapter noted it.
     watchUrl: ({ id, position }) =>
