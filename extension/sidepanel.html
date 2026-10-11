@@ -189,6 +189,9 @@
       line-height: 1.4;
       text-align: center;
     }
+    /* Playback keys (Rewind 10s, Forward 10s) hold words, not single letters. */
+    main[data-screen="playing"] .keys .btn { flex-direction: column; gap: 8px; font-size: 20px; }
+
     main[data-screen="search"] { gap: 12px; }
     /* The search screen has no status text; give its line to the keys. */
     main[data-screen="search"] #status { display: none; }

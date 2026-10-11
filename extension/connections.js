@@ -7,6 +7,11 @@
 //   "<id>.connectedAt", "<id>.continueWatching", "<id>.search"
 // An app with fetchResults searches without a tab; the side panel saves its
 // results under "<id>.search" itself.
+//
+// "controls" are playback actions (pause, seek). Each one is run inside the
+// app's page (not in the adapter's isolated world), so it can use the page's
+// own player when that's the only safe way, as on Netflix. They must be
+// self-contained: Chrome copies the function into the page.
 
 const CONNECTIONS = {
   netflix: {
@@ -24,6 +29,26 @@ const CONNECTIONS = {
     watchUrl: ({ id }) => `https://www.netflix.com/watch/${id}`,
     isWatching: (url) => new URL(url).pathname.startsWith("/watch"),
     searchUrl: (query) => `https://www.netflix.com/search?q=${encodeURIComponent(query)}`,
+    controls: {
+      togglePause: () => {
+        const video = document.querySelector("video");
+        if (!video) return "Nothing is playing yet.";
+        if (video.paused) video.play();
+        else video.pause();
+        return video.paused ? "Paused." : "Playing.";
+      },
+      // Changing the video's position directly makes Netflix show an error,
+      // so seek through Netflix's own player.
+      seek: (seconds) => {
+        const videoPlayer = window.netflix?.appContext?.state?.playerApp?.getAPI?.().videoPlayer;
+        const sessions = videoPlayer?.getAllPlayerSessionIds?.() ?? [];
+        const session = sessions.find((id) => id.startsWith("watch")) ?? sessions.at(-1);
+        const player = session && videoPlayer.getVideoPlayerBySessionId(session);
+        if (!player) return "Nothing is playing yet.";
+        player.seek(Math.max(0, player.getCurrentTime() + seconds * 1000));
+        return seconds < 0 ? `Back ${-seconds} seconds.` : `Forward ${seconds} seconds.`;
+      },
+    },
   },
   youtube: {
     name: "YouTube",
@@ -42,6 +67,21 @@ const CONNECTIONS = {
       `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
     // Searches without opening a tab (see adapters/youtube-search.js).
     fetchResults: (query) => searchYouTube(query),
+    controls: {
+      togglePause: () => {
+        const video = document.querySelector("video");
+        if (!video) return "Nothing is playing yet.";
+        if (video.paused) video.play();
+        else video.pause();
+        return video.paused ? "Paused." : "Playing.";
+      },
+      seek: (seconds) => {
+        const video = document.querySelector("video");
+        if (!video) return "Nothing is playing yet.";
+        video.currentTime = Math.max(0, video.currentTime + seconds);
+        return seconds < 0 ? `Back ${-seconds} seconds.` : `Forward ${seconds} seconds.`;
+      },
+    },
   },
 };
 

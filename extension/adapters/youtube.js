@@ -1,25 +1,5 @@
-// YouTube adapter: runs inside youtube.com, performs actions on the page, and
-// saves the videos you're partway through for the side panel.
-
-const actions = {
-  togglePause() {
-    const video = document.querySelector("video");
-    if (!video) {
-      return { ok: false, message: "Nothing is playing yet." };
-    }
-    if (video.paused) {
-      video.play().catch(() => {});
-      return { ok: true, message: "Playing." };
-    }
-    video.pause();
-    return { ok: true, message: "Paused." };
-  },
-};
-
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  const action = actions[message.action];
-  sendResponse(action ? action() : { ok: false, message: `Unknown action: ${message.action}` });
-});
+// YouTube adapter: runs inside youtube.com and saves the videos you're partway
+// through for the side panel. Playback controls live in connections.js.
 
 // Every YouTube video has a thumbnail at a predictable address.
 const thumbnail = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;

@@ -1,25 +1,6 @@
-// Netflix adapter: runs inside netflix.com, performs actions on the page, and
-// saves what it reads (Continue Watching, search results) for the side panel.
-
-const actions = {
-  togglePause() {
-    const video = document.querySelector("video");
-    if (!video) {
-      return { ok: false, message: "Nothing is playing yet." };
-    }
-    if (video.paused) {
-      video.play().catch(() => {});
-      return { ok: true, message: "Playing." };
-    }
-    video.pause();
-    return { ok: true, message: "Paused." };
-  },
-};
-
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  const action = actions[message.action];
-  sendResponse(action ? action() : { ok: false, message: `Unknown action: ${message.action}` });
-});
+// Netflix adapter: runs inside netflix.com and saves what it reads (Continue
+// Watching, search results) for the side panel. Playback controls live in
+// connections.js.
 
 // ---------- Continue Watching (home page) ----------
 

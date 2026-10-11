@@ -62,6 +62,8 @@ const ICONS = {
     '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
   backspace: '<path d="M21 5H9l-6 7 6 7h12z"/><path d="M13 10l4 4M17 10l-4 4"/>',
   space: '<path d="M4 10v4h16v-4"/>',
+  rewind: '<path d="M11 7l-6 5 6 5z"/><path d="M19 7l-6 5 6 5z"/>',
+  forward: '<path d="M13 7l6 5-6 5z"/><path d="M5 7l6 5-6 5z"/>',
 };
 
 function iconEl(name) {
@@ -452,8 +454,13 @@ const screens = {
       {
         label: "Pause / Play",
         icon: "pause",
-        onSelect: () => tellAdapter(item.service, "togglePause"),
+        primary: true,
+        onSelect: () => control(item.service, "togglePause"),
       },
+    ],
+    keys: [
+      { label: "Rewind 10s", icon: "rewind", onSelect: () => control(item.service, "seek", -10) },
+      { label: "Forward 10s", icon: "forward", onSelect: () => control(item.service, "seek", 10) },
     ],
   }),
 };
@@ -774,19 +781,25 @@ async function runSearch() {
   );
 }
 
-// Send an action to an app's adapter, running inside the current tab.
-async function tellAdapter(service, action) {
-  const { name, site } = CONNECTIONS[service];
+// Run one of an app's playback controls (see connections.js) inside the page
+// playing in the current tab.
+async function control(service, action, ...args) {
+  const { name, site, controls } = CONNECTIONS[service];
   const tab = await activeTab();
   if (!tab?.url?.startsWith(site)) {
     show(`Open ${name} in this tab first.`);
     return;
   }
   try {
-    const result = await chrome.tabs.sendMessage(tab.id, { action });
-    show(result.message);
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: "MAIN",
+      func: controls[action],
+      args,
+    });
+    show(result);
   } catch {
-    show(`Glance isn't connected to this tab yet. Reload the ${name} page and try again.`);
+    show(`That didn't work on ${name}. Try again in a moment.`);
   }
 }
 
