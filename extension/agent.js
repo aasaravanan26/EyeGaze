@@ -20,16 +20,19 @@ Rules:
 Return ONLY valid JSON, no markdown fences:
 {"suggestions":[{"title":"Ted Lasso","why":"warm and very funny","app":"Netflix"},{"title":"Kitchen Nightmares","why":"loud, silly, easy to watch","app":"YouTube"},{"title":"Derry Girls","why":"sharp teen comedy","app":"Netflix"}]}`;
 
-// What the agent is told when a mood is picked. Apps, started shows and the
-// memory summary are passed in by the side panel; the agent never reads
-// storage itself.
-function buildPickPrompt(mood, { apps, started, likes = [], usual, part, avoid = [] }) {
-  const lines = [`I'm in the mood for something ${mood.toLowerCase()}.`, `My apps: ${apps.join(", ")}.`];
-  if (part) lines.push(`It's ${part}.`);
+// What the agent is told when a mood is picked. The side panel passes in the
+// wording and a short memory summary; the agent never reads storage itself.
+// Shows the person has started are deliberately not included (that would
+// share their viewing history); the side panel filters those out instead.
+//   ask: "something funny"            usual: "funny things"
+//   apps: ["Netflix", "YouTube"]      part: "evening"
+//   likes: titles they said they like avoid: suggestions they passed on
+function buildPickPrompt({ ask, apps, likes = [], usual, part, avoid = [] }) {
+  const lines = [`I'm in the mood for ${ask}.`, `My apps: ${apps.join(", ")}.`];
+  if (part) lines.push(`It's ${part === "night" ? "night" : `the ${part}`}.`);
   if (likes.length) lines.push(`Shows I've said I like (suggest things like these, but not these): ${likes.join(", ")}.`);
-  if (usual) lines.push(`I usually go for something ${usual.toLowerCase()} at this time of day.`);
-  const skip = [...new Set([...started, ...avoid])];
-  if (skip.length) lines.push(`Don't suggest these (already started or passed on): ${skip.join(", ")}.`);
+  if (usual) lines.push(`At this time of day I usually pick ${usual}.`);
+  if (avoid.length) lines.push(`Don't suggest these (I passed on them recently): ${avoid.join(", ")}.`);
   lines.push("Suggest 3 things to watch.");
   return lines.join("\n");
 }
@@ -63,11 +66,11 @@ class Agent {
     return this.push("Suggest 3 completely different things. Don't repeat anything you already suggested.");
   }
 
-  // Drop a user message that got no answer (after an error) so it can be
-  // sent again.
+  // After an error, send the same request again. The unanswered message is
+  // still last in the history (a reply is only recorded when it succeeds), so
+  // nothing needs adding; replacing it would lose the mood and apps.
   retry() {
-    if (this.#history.at(-1)?.role === "user") this.#history.pop();
-    return this.push("Something went wrong. Please suggest 3 things to watch again.");
+    return this;
   }
 
   // Call the model with the recent history. Returns an array of
@@ -78,6 +81,9 @@ class Agent {
     const body = JSON.stringify({
       model: AGENT_MODEL,
       max_tokens: 400,
+      // Ask for a JSON-only reply where the model supports it; the parsing
+      // below also copes if extra text slips through.
+      response_format: { type: "json_object" },
       messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
     });
 
@@ -99,12 +105,12 @@ class Agent {
     }
 
     const data = await res.json();
-    const raw = data.choices[0].message.content
-      .trim()
-      .replace(/^```[a-z]*\n?/, "")
-      .replace(/```$/, "")
-      .trim();
-    const result = JSON.parse(raw);
+    // Take just the JSON object, ignoring code fences or words around it.
+    const text = data.choices?.[0]?.message?.content ?? "";
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end < start) throw new Error("No JSON in reply");
+    const result = JSON.parse(text.slice(start, end + 1));
     const suggestions = (result.suggestions ?? []).filter((s) => s?.title).slice(0, 3);
     if (!suggestions.length) throw new Error("No suggestions in reply");
 

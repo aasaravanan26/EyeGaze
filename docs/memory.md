@@ -42,7 +42,7 @@ Time of day is split into four parts: **morning, afternoon, evening and night**.
 ## Privacy
 
 - **Your memory stays on your device.** It's stored locally in Chrome, on the device you use. Your viewing history is never uploaded.
-- **The AI only sees a short summary.** When Glance's AI suggests shows, it can see only high-level tendencies, like "usually funny in the evening," the few shows you've said you like, and what to leave out. It never sees the list of shows you've watched.
+- **The AI only sees a short summary.** Help me pick asks an AI model, through the **OpenRouter** service, for suggestions. It sends only the mood you picked, which apps you use, high-level tendencies like "usually funny things in the evening," the few shows you've said you like, and suggestions you recently passed on. It never sees the shows you've watched or started: Glance leaves those out of the suggestions itself, on your device.
 - **Uninstalling Glance erases its memory.**
 
 ## Where things stand

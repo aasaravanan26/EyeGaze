@@ -15,9 +15,29 @@ let stored = {};
 
 // The agent suggests titles for Help me pick. Everything else is fixed.
 const agent = new Agent();
-const MOODS = ["Funny", "Gripping", "Relaxing", "Surprise me"];
+// Each mood has its own wording, so sentences read naturally:
+//   ask: what the agent is told ("I'm in the mood for something funny")
+//   habit: how a habit is described ("you usually pick funny things")
+//   heading: the suggestions screen's heading
+const MOODS = [
+  { label: "Funny", ask: "something funny", habit: "funny things", heading: "Something funny" },
+  { label: "Gripping", ask: "something gripping", habit: "gripping things", heading: "Something gripping" },
+  { label: "Relaxing", ask: "something relaxing", habit: "relaxing things", heading: "Something relaxing" },
+  { label: "Surprise me", ask: "anything, so surprise me", habit: "surprises", heading: "Three surprises" },
+];
+const moodByLabel = (label) => MOODS.find((mood) => mood.label === label);
 // The suggestions on show, so Back can return to them without asking again.
-const suggest = { mood: "", items: [], loading: false, error: "", request: 0 };
+// phase: "thinking" (asking the AI) or "finding" (checking the apps).
+// retryWith: how Try again asks: resend ("retry") or ask for new titles ("more").
+const suggest = {
+  mood: null,
+  items: [],
+  loading: false,
+  phase: "thinking",
+  error: "",
+  retryWith: "retry",
+  request: 0,
+};
 
 const screenEl = document.getElementById("screen");
 const backBtn = document.getElementById("back");
@@ -132,15 +152,18 @@ const passedTitles = () =>
     .passed.filter((entry) => Date.now() - entry.at < PASSED_FOR_MS)
     .map((entry) => entry.title);
 
-// The mood picked most at this time of day, once there are a few picks to
-// go on (one random pick shouldn't reshape everything).
+// The mood (from MOODS) picked most at this time of day, once there are a
+// few picks to go on (one random pick shouldn't reshape everything).
 function usualMood(part = dayPart()) {
   const picks = memory().moods.filter((pick) => pick.part === part);
   if (picks.length < 3) return null;
   const counts = {};
   for (const pick of picks) counts[pick.mood] = (counts[pick.mood] ?? 0) + 1;
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  return moodByLabel(Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]) ?? null;
 }
+
+// "in the morning", ..., "at night"
+const duringPart = (part) => (part === "night" ? "at night" : `in the ${part}`);
 
 // Plain sentences for Settings, so the person can see what Glance has learned.
 function memorySentences() {
@@ -149,7 +172,7 @@ function memorySentences() {
   if (likes.length) lines.push(`You like ${likes.slice(-3).reverse().join(", ")}${likes.length > 3 ? " and more" : ""}.`);
   for (const part of ["morning", "afternoon", "evening", "night"]) {
     const mood = usualMood(part);
-    if (mood) lines.push(`You usually pick ${mood.toLowerCase()} in the ${part}.`);
+    if (mood) lines.push(`You usually pick ${mood.habit} ${duringPart(part)}.`);
   }
   const passed = passedTitles();
   if (passed.length) lines.push(`You passed on ${passed.length} suggestion${passed.length > 1 ? "s" : ""} lately.`);
@@ -364,7 +387,8 @@ const screens = {
     );
     return {
       greeting: greeting(),
-      heading: "What are you in the mood for?",
+      // Help me pick asks about mood next, so home asks something else.
+      heading: "What would you like to watch?",
       buttons,
       note: anyConnected() ? "" : "No apps are on yet. Look at Settings to add one.",
       onElse: shows.length > 1 ? () => replace("home", offset + 1) : null,
@@ -456,35 +480,46 @@ const screens = {
     ],
   }),
 
-  // Help me pick: one question, then three suggestions. Picking one runs
-  // the normal search, so the real posters appear and nothing plays until
-  // the person chooses it.
+  // Help me pick: one question, then three suggestions. Picking a suggestion
+  // plays it straight away when the app has that exact title (Home → mood →
+  // suggestion → playing: three looks); otherwise the search results show.
   pick: () => ({
     heading: "What are you in the mood for?",
     buttons: MOODS.map((mood) => ({
-      label: mood,
+      label: mood.label,
       icon: "sparkle",
       onSelect: () => startSuggestions(mood),
     })),
   }),
 
+  // Suggestions are only shown once they've been found on the person's apps,
+  // so picking one plays it straight away.
   suggest: () => {
-    let note = "";
-    if (suggest.loading) note = "Thinking…";
-    else if (suggest.error) note = suggest.error;
-    else if (suggest.items.length) note = "Something else asks for three more.";
+    let message = "";
+    if (suggest.loading) {
+      message =
+        suggest.phase === "finding"
+          ? `Finding them on ${listJoin(connectedApps().map(appName))}…`
+          : "Thinking of ideas…";
+    } else if (suggest.error) {
+      message = suggest.error;
+    }
+    const retry = () => fetchSuggestions(suggest.retryWith === "more" ? agent.more() : agent.retry());
     const buttons = suggest.error
-      ? [{ label: "Try again", icon: "next", onSelect: () => fetchSuggestions(agent.retry()) }]
-      : suggest.items.map((item) => ({
-          label: item.title,
-          sub: [item.why, item.app].filter(Boolean).join(" · "),
-          icon: "search",
-          onSelect: () => searchFor(item.title),
-        }));
+      ? [{ label: "Try again", icon: "next", onSelect: retry }]
+      : suggest.loading
+        ? []
+        : suggest.items.map((item) => ({
+            label: item.title,
+            sub: [item.why, appName(item.service)].filter(Boolean).join(" · "),
+            art: item.image,
+            icon: "play",
+            onSelect: () => play(item),
+          }));
     return {
-      heading: suggest.mood === "Surprise me" ? "Three surprises" : `Something ${suggest.mood.toLowerCase()}`,
+      heading: suggest.mood?.heading ?? "",
+      message,
       buttons,
-      note,
       onElse:
         suggest.loading || suggest.error
           ? null
@@ -750,6 +785,15 @@ function render() {
     parts.push(query);
   }
 
+  // A message in the middle of the screen, for while something is loading
+  // (or didn't work).
+  if (screen.message) {
+    const message = document.createElement("div");
+    message.className = "message-box";
+    message.textContent = screen.message;
+    parts.push(message);
+  }
+
   if (screen.facts) {
     const facts = document.createElement("ul");
     facts.className = "facts";
@@ -910,54 +954,170 @@ function startSuggestions(mood) {
   suggest.mood = mood;
   suggest.items = [];
   suggest.error = "";
-  remember("moods", { mood, part: dayPart() });
+  remember("moods", { mood: mood.label, part: dayPart() });
   // The agent sees a short summary of memory: liked shows, the usual mood
-  // at this time of day, and what to leave out. Never a viewing history.
+  // at this time of day, and suggestions passed on. Never a viewing history:
+  // shows already started are filtered out here, on the device.
   const context = {
+    ask: mood.ask,
     apps: connectedApps().map(appName),
-    started: startedShows().slice(0, 8).map((show) => show.title),
     likes: likedTitles().slice(-8).reverse(),
-    usual: usualMood(),
+    usual: usualMood()?.habit,
     part: dayPart(),
     avoid: passedTitles(),
   };
   go("suggest");
-  fetchSuggestions(agent.reset(buildPickPrompt(mood, context)));
+  fetchSuggestions(agent.reset(buildPickPrompt(context)));
 }
 
-// Ask the agent (whose next message has already been queued) and show what
-// comes back. A reply for a screen the person has left is dropped.
+// Titles compared loosely: case, accents, punctuation and bracketed notes
+// like "(U.S.)" don't matter.
+const normalizeTitle = (title) =>
+  title
+    .replace(/\([^)]*\)/g, "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+// ---------- Checking suggestions against the real apps ----------
+
+// The AI suggests from general knowledge, so it can be wrong about what an
+// app has today. Before a suggestion is shown, Glance looks it up on the app
+// the AI named; only titles that are really there are shown, with the app's
+// own artwork and ID, so picking one plays it straight away.
+
+// Apps that search in a helper tab (like Netflix) have one tab, so their
+// lookups take turns.
+const lookupQueue = {};
+function inTurn(service, task) {
+  const turn = (lookupQueue[service] ?? Promise.resolve()).then(task, task);
+  lookupQueue[service] = turn.catch(() => {});
+  return turn;
+}
+
+// Wait for an app's adapter to save search results for this query. The
+// adapter may save an empty list before the page has loaded its results, so
+// an empty list only counts once it has stayed empty for a moment (that's
+// how a title the app doesn't have looks). Gives up after a while regardless.
+const LOOKUP_TIMEOUT_MS = 8000;
+const EMPTY_GRACE_MS = 2500;
+function waitForResults(service, query) {
+  const key = `${service}.search`;
+  return new Promise((resolve) => {
+    let latest = null;
+    let emptyTimer = null;
+    const done = () => {
+      clearTimeout(timer);
+      clearTimeout(emptyTimer);
+      resolve(latest ?? []);
+      chrome.storage.onChanged.removeListener(listener);
+    };
+    const timer = setTimeout(done, LOOKUP_TIMEOUT_MS);
+    function listener(changes, area) {
+      const saved = changes[key]?.newValue;
+      if (area !== "local" || saved?.query !== query) return;
+      latest = saved.items;
+      if (latest.length) done();
+      else emptyTimer ??= setTimeout(done, EMPTY_GRACE_MS);
+    }
+    chrome.storage.onChanged.addListener(listener);
+  });
+}
+
+// Look a title up on one app. Shows must match exactly; for videos, the top
+// result that contains the title counts (YouTube rarely has an exact match).
+async function findOnApp(service, title) {
+  const connection = CONNECTIONS[service];
+  const results = connection.fetchResults
+    ? await connection.fetchResults(title).catch(() => [])
+    : await inTurn(service, async () => {
+        const arrived = waitForResults(service, title);
+        await searchInHelperTab(service, connection.searchUrl(title));
+        return arrived;
+      });
+  const wanted = normalizeTitle(title);
+  const matches = (result) =>
+    connection.kind === "videos"
+      ? normalizeTitle(result.title).includes(wanted)
+      : normalizeTitle(result.title) === wanted;
+  const found = results.find(matches);
+  return found ? { ...found, service } : null;
+}
+
+// Check one suggestion on the app the AI named (or, if it named an app that
+// isn't on, each app in turn). Returns a playable item, or null.
+async function verify(suggestion) {
+  const named = connectedApps().find((id) => appName(id).toLowerCase() === suggestion.app?.toLowerCase());
+  for (const service of named ? [named] : connectedApps()) {
+    const found = await findOnApp(service, suggestion.title);
+    if (found) return { ...found, why: suggestion.why };
+  }
+  return null;
+}
+
+// How many extra times to ask when filtering and checking leave fewer than three.
+const TOP_UP_ATTEMPTS = 2;
+
+// Ask the agent (whose next message has already been queued), then keep only
+// suggestions that are new to the person and really on their apps, asking
+// for more if that leaves fewer than three. Shows the person has started or
+// said they like are dropped here rather than sent to the AI. Nothing is
+// shown until all three are ready, so the screen doesn't change under them.
+// A reply for a screen the person has left is dropped.
 async function fetchSuggestions() {
   const request = ++suggest.request;
+  const stale = () => request !== suggest.request;
   suggest.loading = true;
+  suggest.phase = "thinking";
   suggest.error = "";
+  suggest.retryWith = "retry";
   render();
   try {
-    const items = await agent.step();
-    if (request !== suggest.request) return;
-    suggest.items = items;
+    const skip = new Set([...startedShows().map((show) => show.title), ...likedTitles()].map(normalizeTitle));
+    const items = [];
+    for (let attempt = 0; ; attempt++) {
+      suggest.phase = "thinking";
+      if (current.name === "suggest") render();
+      const reply = await agent.step();
+      if (stale()) return;
+
+      const fresh = reply.filter((item) => {
+        const key = normalizeTitle(item.title);
+        if (skip.has(key)) return false;
+        skip.add(key);
+        return true;
+      });
+      suggest.phase = "finding";
+      if (current.name === "suggest") render();
+      const checked = await Promise.all(fresh.map(verify));
+      if (stale()) return;
+      items.push(...checked.filter(Boolean));
+
+      if (items.length >= 3 || attempt === TOP_UP_ATTEMPTS) break;
+      agent.more();
+    }
+    if (!items.length) {
+      // The AI answered, but none of it is on the person's apps: ask again
+      // for different titles rather than resending the same request.
+      suggest.retryWith = "more";
+      throw new Error("None of the suggestions were found on the apps");
+    }
+    suggest.items = items.slice(0, 3);
   } catch (error) {
-    if (request !== suggest.request) return;
+    if (stale()) return;
     suggest.items = [];
-    suggest.error = /API 401/.test(error.message)
-      ? "That AI key didn't work. Check it in Settings."
-      : "Couldn't get suggestions right now.";
+    if (/API 401/.test(error.message)) suggest.error = "That AI key didn't work. Check it in Settings.";
+    else if (suggest.retryWith === "more") suggest.error = "Couldn't find those on your apps.";
+    else suggest.error = "Couldn't get suggestions right now.";
     console.error("[Glance] suggestions failed", error);
   } finally {
-    if (request === suggest.request) {
+    if (!stale()) {
       suggest.loading = false;
       if (current.name === "suggest") render();
     }
   }
-}
-
-// Search every connected app for a title, as if it had been spelled out.
-function searchFor(title) {
-  search.query = title;
-  search.group = null;
-  search.page = 0;
-  go("search");
-  runSearch();
 }
 
 function addLetter(letter) {
