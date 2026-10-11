@@ -96,7 +96,7 @@ const connectedApps = () => Object.keys(CONNECTIONS).filter((id) => stored.conne
 const anyConnected = () => connectedApps().length > 0;
 const appName = (id) => CONNECTIONS[id]?.name ?? id;
 
-// "Netflix", "Netflix and YouTube", "Netflix, Hulu, and YouTube"
+// "Netflix", "Netflix and YouTube", "A, B, and C"
 function listJoin(items) {
   if (items.length <= 2) return items.join(" and ");
   return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
@@ -249,13 +249,6 @@ const screens = {
     intro: "Look at an app to turn it on or off.",
     buttons: [
       ...Object.keys(CONNECTIONS).map(connectionButton),
-      ...COMING_SOON.map(({ name, icon }) => ({
-        label: name,
-        sub: "Coming soon",
-        icon,
-        badge: "Soon",
-        disabled: true,
-      })),
       {
         label: "Done",
         icon: "check",

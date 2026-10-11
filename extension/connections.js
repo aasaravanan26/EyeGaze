@@ -85,9 +85,6 @@ const CONNECTIONS = {
   },
 };
 
-// Apps shown in setup as "Coming soon" until their adapters exist.
-const COMING_SOON = [{ name: "Hulu", icon: "tv" }];
-
 async function isAdapterRegistered(id) {
   const scripts = await chrome.scripting.getRegisteredContentScripts({ ids: [id] });
   return scripts.length > 0;
