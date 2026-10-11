@@ -15,6 +15,7 @@ It follows one rule above all: **memory helps, but you decide.**
 | What | Example | Why it helps |
 |---|---|---|
 | What you're watching | Your place in a show | "Continue" is one look away |
+| Shows you like | "I like this" while watching | Suggestions lean the same way |
 | Your mood picks | Funny more often than gripping | Funny options appear first |
 | Time of day | Comedy in the evening | Suggestions fit the moment |
 | Your favorite apps | Netflix more than YouTube | The app you use most comes first |
@@ -41,7 +42,7 @@ Time of day is split into four parts: **morning, afternoon, evening and night**.
 ## Privacy
 
 - **Your memory stays on your device.** It's stored locally in Chrome, on the device you use. Your viewing history is never uploaded.
-- **The AI only sees a short summary.** When Glance's AI suggests questions and shows, it can see only high-level tendencies, like "likes funny shows, evenings, Netflix." It never sees the list of shows you've watched.
+- **The AI only sees a short summary.** When Glance's AI suggests shows, it can see only high-level tendencies, like "usually funny in the evening," the few shows you've said you like, and what to leave out. It never sees the list of shows you've watched.
 - **Uninstalling Glance erases its memory.**
 
 ## Where things stand
@@ -52,8 +53,11 @@ Glance is early, and memory is being built step by step.
 |---|---|
 | "Continue" from Netflix's Continue Watching row | ✅ Built |
 | Remembering the last thing Glance played | ✅ Built, being tested |
-| Mood, time-of-day and app preferences | Planned, arriving with the question screen |
-| Passed-on shows | Planned |
+| Mood and time-of-day preferences | ✅ Built, being tested |
+| Shows you like ("I like this" while watching) | ✅ Built, being tested |
+| Passed-on shows | ✅ Built, being tested |
 | Settings: see what Glance remembers | ✅ Built |
-| Settings: clear, "don't remember" | Planned |
-| Short summary for the AI | Planned, arriving with the AI agent |
+| Settings: clear what Glance learned | ✅ Built, being tested |
+| Settings: "don't remember" | Planned |
+| App preferences | Planned |
+| Short summary for the AI | ✅ Built, being tested |

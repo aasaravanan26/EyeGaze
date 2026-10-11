@@ -9,6 +9,8 @@
 //   "<app>.search": the app's latest search results, read by its adapter
 //   "lastWatched": the last thing Glance started playing, e.g. { service, id, ... }
 //   "apiKey": the OpenRouter key that powers Help me pick (see agent.js)
+//   "memory": what Glance has learned (see docs/memory.md):
+//     { likes: [{ title, service, at }], moods: [{ mood, part, at }], passed: [{ title, at }] }
 let stored = {};
 
 // The agent suggests titles for Help me pick. Everything else is fixed.
@@ -66,6 +68,7 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
   settings:
     '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
   backspace: '<path d="M21 5H9l-6 7 6 7h12z"/><path d="M13 10l4 4M17 10l-4 4"/>',
@@ -94,6 +97,63 @@ function greeting() {
   if (hour >= 5 && hour < 12) return "Good morning";
   if (hour >= 12 && hour < 17) return "Good afternoon";
   return "Good evening";
+}
+
+// ---------- Memory ----------
+
+// Patterns, not a diary: a few liked shows, which moods get picked when, and
+// shows passed on lately. Everything stays in chrome.storage.local.
+const MEMORY_LIMIT = { likes: 30, moods: 60, passed: 30 };
+const PASSED_FOR_MS = 21 * 24 * 60 * 60 * 1000;
+
+const memory = () => ({ likes: [], moods: [], passed: [], ...stored.memory });
+
+// Add an entry to one of memory's lists, keeping the newest. Updates
+// "stored" right away so the screen can redraw without waiting.
+function remember(list, entry) {
+  const next = memory();
+  next[list] = [...next[list], { ...entry, at: Date.now() }].slice(-MEMORY_LIMIT[list]);
+  stored.memory = next;
+  return chrome.storage.local.set({ memory: next });
+}
+
+function dayPart(date = new Date()) {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 22) return "evening";
+  return "night";
+}
+
+const likedTitles = () => memory().likes.map((like) => like.title);
+const isLiked = (item) => memory().likes.some((like) => like.title === item.title && like.service === item.service);
+const passedTitles = () =>
+  memory()
+    .passed.filter((entry) => Date.now() - entry.at < PASSED_FOR_MS)
+    .map((entry) => entry.title);
+
+// The mood picked most at this time of day, once there are a few picks to
+// go on (one random pick shouldn't reshape everything).
+function usualMood(part = dayPart()) {
+  const picks = memory().moods.filter((pick) => pick.part === part);
+  if (picks.length < 3) return null;
+  const counts = {};
+  for (const pick of picks) counts[pick.mood] = (counts[pick.mood] ?? 0) + 1;
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// Plain sentences for Settings, so the person can see what Glance has learned.
+function memorySentences() {
+  const lines = [];
+  const likes = likedTitles();
+  if (likes.length) lines.push(`You like ${likes.slice(-3).reverse().join(", ")}${likes.length > 3 ? " and more" : ""}.`);
+  for (const part of ["morning", "afternoon", "evening", "night"]) {
+    const mood = usualMood(part);
+    if (mood) lines.push(`You usually pick ${mood.toLowerCase()} in the ${part}.`);
+  }
+  const passed = passedTitles();
+  if (passed.length) lines.push(`You passed on ${passed.length} suggestion${passed.length > 1 ? "s" : ""} lately.`);
+  return lines;
 }
 
 // ---------- Data across connected apps ----------
@@ -330,8 +390,9 @@ const screens = {
     ],
   }),
 
-  // What Glance remembers, in plain sentences. (Learning preferences, clearing
-  // memory and "don't remember" come later; see docs/memory.md.)
+  // What Glance remembers, in plain sentences: where you are in your shows,
+  // and what Help me pick has learned. ("Don't remember" comes later; see
+  // docs/memory.md.)
   memory: () => {
     const shows = startedShows();
     const facts = [];
@@ -352,13 +413,32 @@ const screens = {
     facts.push(
       anyConnected() ? `You watch on ${listJoin(connectedApps().map(appName))}.` : "No apps are on yet."
     );
-    facts.push("As you choose, Glance will learn what you enjoy, like funny shows in the evening.");
+    const learned = memorySentences();
+    if (learned.length) facts.push(...learned);
+    else facts.push("As you choose, Glance will learn what you enjoy, like funny shows in the evening.");
     facts.push("All of this stays on this device.");
     return {
       heading: "What Glance remembers",
       intro: "Glance remembers a little, so what you want is usually the first thing you see.",
       facts,
-      buttons: [],
+      buttons: [
+        {
+          label: "Forget what Glance learned",
+          icon: "backspace",
+          disabled: !learned.length,
+          onSelect: () =>
+            go("confirm", {
+              heading: "Forget what Glance learned?",
+              intro: "Your likes, mood picks and passed-on shows are cleared. This can't be undone.",
+              no: "Keep it",
+              yes: "Forget",
+              onYes: () => {
+                delete stored.memory;
+                return chrome.storage.local.remove("memory");
+              },
+            }),
+        },
+      ],
     };
   },
 
@@ -405,7 +485,14 @@ const screens = {
       heading: suggest.mood === "Surprise me" ? "Three surprises" : `Something ${suggest.mood.toLowerCase()}`,
       buttons,
       note,
-      onElse: suggest.loading || suggest.error ? null : () => fetchSuggestions(agent.more()),
+      onElse:
+        suggest.loading || suggest.error
+          ? null
+          : () => {
+              // Passing on three suggestions means "not right now".
+              for (const item of suggest.items) remember("passed", { title: item.title });
+              fetchSuggestions(agent.more());
+            },
     };
   },
 
@@ -511,6 +598,17 @@ const screens = {
         primary: true,
         onSelect: () => control(item.service, "togglePause"),
       },
+      // Saying you like a show teaches Help me pick what to suggest next.
+      isLiked(item)
+        ? { label: "You like this", icon: "heart", on: true, disabled: true }
+        : {
+            label: "I like this",
+            icon: "heart",
+            onSelect: async () => {
+              await remember("likes", { title: item.title, service: item.service });
+              render();
+            },
+          },
     ],
     keys: [
       { label: "Rewind 10s", icon: "rewind", onSelect: () => control(item.service, "seek", -10) },
@@ -812,9 +910,16 @@ function startSuggestions(mood) {
   suggest.mood = mood;
   suggest.items = [];
   suggest.error = "";
+  remember("moods", { mood, part: dayPart() });
+  // The agent sees a short summary of memory: liked shows, the usual mood
+  // at this time of day, and what to leave out. Never a viewing history.
   const context = {
     apps: connectedApps().map(appName),
     started: startedShows().slice(0, 8).map((show) => show.title),
+    likes: likedTitles().slice(-8).reverse(),
+    usual: usualMood(),
+    part: dayPart(),
+    avoid: passedTitles(),
   };
   go("suggest");
   fetchSuggestions(agent.reset(buildPickPrompt(mood, context)));
