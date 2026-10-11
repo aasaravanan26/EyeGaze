@@ -11,7 +11,8 @@ Your ONLY job is to suggest things to watch. Playback and navigation are handled
 Rules:
 - Return EXACTLY 3 suggestions, each a real, well-known title on one of the person's apps
 - Fit the mood you're given; vary the suggestions (no two alike in genre or tone)
-- Never repeat anything already suggested in this conversation, and never suggest a show the person has already started
+- Never repeat anything already suggested in this conversation, and never suggest anything the person says to leave out
+- If the person names shows they like, lean toward similar tone and genre, without repeating those shows
 - "title": the exact title as the app lists it, so a search for it finds it; max 4 words
 - "why": one short reason, max 6 words, lowercase, no trailing period
 - "app": which of the person's apps has it (use the app name you were given)
@@ -19,11 +20,16 @@ Rules:
 Return ONLY valid JSON, no markdown fences:
 {"suggestions":[{"title":"Ted Lasso","why":"warm and very funny","app":"Netflix"},{"title":"Kitchen Nightmares","why":"loud, silly, easy to watch","app":"YouTube"},{"title":"Derry Girls","why":"sharp teen comedy","app":"Netflix"}]}`;
 
-// What the agent is told when a mood is picked. Apps and started shows are
-// passed in by the side panel; the agent never reads storage itself.
-function buildPickPrompt(mood, { apps, started }) {
+// What the agent is told when a mood is picked. Apps, started shows and the
+// memory summary are passed in by the side panel; the agent never reads
+// storage itself.
+function buildPickPrompt(mood, { apps, started, likes = [], usual, part, avoid = [] }) {
   const lines = [`I'm in the mood for something ${mood.toLowerCase()}.`, `My apps: ${apps.join(", ")}.`];
-  if (started.length) lines.push(`Shows I've already started (don't suggest these): ${started.join(", ")}.`);
+  if (part) lines.push(`It's ${part}.`);
+  if (likes.length) lines.push(`Shows I've said I like (suggest things like these, but not these): ${likes.join(", ")}.`);
+  if (usual) lines.push(`I usually go for something ${usual.toLowerCase()} at this time of day.`);
+  const skip = [...new Set([...started, ...avoid])];
+  if (skip.length) lines.push(`Don't suggest these (already started or passed on): ${skip.join(", ")}.`);
   lines.push("Suggest 3 things to watch.");
   return lines.join("\n");
 }
