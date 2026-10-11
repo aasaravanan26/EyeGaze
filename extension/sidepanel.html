@@ -35,25 +35,53 @@
       }
     }
 
-    * { box-sizing: border-box; }
+    /* Sizes scale with the panel: the side panel can be dragged from very
+       narrow to very wide, and the tablet's screen is small. Each size has a
+       floor (still readable) and a ceiling (the design size), and follows the
+       panel's width in between. Heights follow the panel's height. */
+    :root {
+      --pad-x: clamp(10px, 4vw, 18px);
+      --pad-y: clamp(12px, 3vh, 22px);
+      --gap: clamp(8px, 2.5vw, 14px);
+      --radius: clamp(12px, 4vw, 20px);
+      --font-h1: clamp(18px, 6.5vw, 26px);
+      --font-intro: clamp(14px, 4.2vw, 17px);
+      --font-btn: clamp(15px, 5vw, 21px);
+      --font-sub: clamp(12px, 3.8vw, 16px);
+      --font-note: clamp(13px, 3.8vw, 16px);
+      --font-key: clamp(18px, 6.5vw, 28px);
+      --icon: clamp(22px, 6.5vw, 30px);
+      --btn-min: clamp(56px, 11vh, 88px);
+      --btn-pad: clamp(10px, 3vw, 16px) clamp(12px, 4vw, 20px);
+      --result-h: clamp(44px, 7.5vh, 55px);
+      --footer-h: clamp(56px, 10vh, 76px);
+    }
+
+    * { box-sizing: border-box; min-width: 0; }
     body {
       margin: 0;
       height: 100vh;
       display: grid;
       grid-template-rows: 1fr auto;
-      gap: 20px;
-      padding: 22px 18px;
+      gap: clamp(10px, 2.5vh, 20px);
+      padding: var(--pad-y) var(--pad-x);
+      overflow: hidden;
       background: var(--bg);
       color: var(--text);
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       user-select: none;
     }
-    main { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+    /* If a screen still can't fit (a very short panel), it scrolls rather
+       than spilling over the footer. */
+    main { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; overflow-y: auto; }
 
-    .greeting { margin: 0 0 -8px; font-size: 15px; font-weight: 600; color: var(--icon); }
-    h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.25; }
-    .intro { margin: -8px 0 4px; font-size: 17px; line-height: 1.45; color: var(--muted); }
-    #status { min-height: 1.5em; font-size: 16px; line-height: 1.4; color: var(--muted); }
+    /* Words never push past the panel's edge; very long ones break. */
+    h1, p, .btn, .facts, .query, #status { overflow-wrap: anywhere; }
+
+    .greeting { margin: 0 0 -8px; font-size: var(--font-note); font-weight: 600; color: var(--icon); }
+    h1 { margin: 0 0 4px; font-size: var(--font-h1); line-height: 1.25; }
+    .intro { margin: -8px 0 4px; font-size: var(--font-intro); line-height: 1.45; color: var(--muted); }
+    #status { flex: none; min-height: 1.5em; font-size: var(--font-note); line-height: 1.4; color: var(--muted); }
 
     /* ---------- Choices ---------- */
 
@@ -61,37 +89,39 @@
       position: relative;
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 16px 20px;
+      gap: var(--gap);
+      padding: var(--btn-pad);
       border: 3px solid var(--card-edge);
-      border-radius: 20px;
+      border-radius: var(--radius);
       background: var(--card);
       color: inherit;
       font: inherit;
-      font-size: 21px;
+      font-size: var(--font-btn);
       font-weight: 700;
+      line-height: 1.2;
       text-align: left;
       cursor: pointer;
+      max-width: 100%;
     }
-    main .btn { flex: 1; min-height: 88px; }
-    main .btn.primary { flex: 1.4; }
+    main .btn { flex: 1 0 auto; min-height: var(--btn-min); }
+    main .btn.primary { flex: 1.4 0 auto; }
     /* Secondary choices (like Settings on home): always there, but quieter. */
     main .btn.minor {
       flex: 0 0 auto;
-      min-height: 64px;
+      min-height: calc(var(--btn-min) * 0.75);
       background: transparent;
-      font-size: 18px;
+      font-size: var(--font-intro);
       color: var(--muted);
     }
-    main .btn.minor .icon { width: 24px; height: 24px; color: var(--muted); }
+    main .btn.minor .icon { width: calc(var(--icon) * 0.8); height: calc(var(--icon) * 0.8); color: var(--muted); }
 
     /* Plain sentences, like "What Glance remembers". Not buttons, so they
        don't look like something to select. */
-    .facts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
+    .facts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--gap); }
     .facts li {
-      padding-left: 16px;
+      padding-left: var(--pad-x);
       border-left: 3px solid var(--accent);
-      font-size: 19px;
+      font-size: var(--font-intro);
       line-height: 1.45;
     }
     .btn:hover { border-color: var(--accent); }
@@ -109,9 +139,9 @@
     .btn.selected .icon,
     .btn.selected .sub { color: var(--bg); }
 
-    .btn .icon { flex: none; width: 30px; height: 30px; color: var(--icon); }
-    .btn .text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .btn .sub { font-size: 16px; font-weight: 500; color: var(--muted); }
+    .btn .icon { flex: none; width: var(--icon); height: var(--icon); color: var(--icon); }
+    .btn .text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+    .btn .sub { font-size: var(--font-sub); font-weight: 500; color: var(--muted); }
     /* Long titles (common on YouTube) stop at two lines. */
     .btn .label {
       display: -webkit-box;
@@ -124,22 +154,22 @@
     .btn.primary .sub { color: var(--primary-sub); }
     .btn .art {
       flex: none;
-      width: 45%;
+      width: 40%;
       max-width: 170px;
       aspect-ratio: 16 / 9;
       object-fit: cover;
-      border-radius: 12px;
+      border-radius: calc(var(--radius) * 0.6);
     }
 
     .btn.on { border-color: var(--accent); }
     .btn .badge {
       position: absolute;
-      top: 12px;
-      right: 14px;
+      top: 10px;
+      right: 12px;
       padding: 3px 10px;
       border-radius: 999px;
       background: var(--card-edge);
-      font-size: 13px;
+      font-size: clamp(11px, 3vw, 13px);
       font-weight: 700;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -149,14 +179,14 @@
     /* ---------- Typed once, during setup ---------- */
 
     .field {
-      min-height: 60px;
-      padding: 0 18px;
+      min-height: var(--result-h);
+      padding: 0 var(--pad-x);
       border: 3px solid var(--card-edge);
-      border-radius: 16px;
+      border-radius: var(--radius);
       background: var(--card);
       color: var(--text);
       font: inherit;
-      font-size: 20px;
+      font-size: var(--font-btn);
       outline: none;
     }
     .field:focus { border-color: var(--accent); }
@@ -166,65 +196,75 @@
     .query {
       display: flex;
       align-items: center;
-      min-height: 60px;
-      padding: 0 18px;
-      border-radius: 16px;
+      flex: none;
+      min-height: var(--result-h);
+      padding: 6px var(--pad-x);
+      border-radius: var(--radius);
       background: var(--card);
-      font-size: 30px;
+      font-size: var(--font-key);
       font-weight: 700;
       letter-spacing: 0.08em;
-      white-space: pre;
+      white-space: pre-wrap;
+      line-height: 1.2;
     }
-    .query .icon { flex: none; width: 26px; height: 26px; margin-right: 12px; color: var(--icon); }
-    .query::after { content: ""; width: 3px; height: 32px; margin-left: 4px; background: var(--accent); }
+    .query .icon { flex: none; width: calc(var(--icon) * 0.85); height: calc(var(--icon) * 0.85); margin-right: 12px; color: var(--icon); }
+    .query::after { content: ""; flex: none; width: 3px; height: 1.1em; margin-left: 4px; background: var(--accent); }
 
     /* The letter keys take all the remaining height, which never changes. */
-    .keys { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
+    .keys { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); min-height: 0; }
     .keys.wide { grid-template-columns: 1fr 1fr 1fr; }
-    .keys .btn { justify-content: center; min-height: 0; padding: 8px; font-size: 28px; }
-    .keys .btn .icon { width: 28px; height: 28px; }
+    .keys .btn { justify-content: center; min-height: 0; padding: 8px; font-size: var(--font-key); }
+    .keys .btn .icon { width: var(--icon); height: var(--icon); }
 
     /* Results area: always room for three compact results, whether it holds
        results, a "searching" message, or nothing yet, so nothing below moves. */
-    .results { flex: 0 0 auto; height: 182px; display: flex; flex-direction: column; gap: 8px; }
-    .results .btn { flex: 0 0 auto; height: 55px; min-height: 0; padding: 6px 14px; font-size: 18px; }
+    .results { flex: 0 0 auto; height: calc(3 * var(--result-h) + 2 * 8px); display: flex; flex-direction: column; gap: 8px; }
+    .results .btn { flex: 0 0 auto; height: var(--result-h); min-height: 0; padding: 6px 14px; font-size: var(--font-intro); }
     .results .btn .label { -webkit-line-clamp: 1; }
-    .results .btn .sub { font-size: 14px; }
-    .results .art { width: 72px; }
+    .results .btn .sub { font-size: calc(var(--font-sub) * 0.9); }
+    .results .art { width: clamp(52px, 18vw, 72px); }
     .results .message,
     .message-box {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 12px 20px;
+      padding: 12px var(--pad-x);
       border: 2px dashed var(--card-edge);
-      border-radius: 16px;
+      border-radius: var(--radius);
       color: var(--muted);
-      font-size: 17px;
+      font-size: var(--font-intro);
       line-height: 1.4;
       text-align: center;
     }
     /* Playback keys (Rewind 10s, Forward 10s) hold words, not single letters. */
-    main[data-screen="playing"] .keys .btn { flex-direction: column; gap: 8px; font-size: 20px; }
+    main[data-screen="playing"] .keys .btn { flex-direction: column; gap: 8px; font-size: var(--font-btn); }
 
-    main[data-screen="search"] { gap: 12px; }
+    main[data-screen="search"] { gap: calc(var(--gap) * 0.85); }
     /* The search screen has no status text; give its line to the keys. */
     main[data-screen="search"] #status { display: none; }
 
     /* ---------- Back, Home and Something else: same place on every screen ---------- */
 
-    footer { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; height: 76px; }
+    footer { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: calc(var(--gap) * 0.85); height: var(--footer-h); }
     footer .btn {
       justify-content: center;
-      gap: 8px;
-      padding: 8px;
+      gap: 6px;
+      padding: 6px;
       border-color: transparent;
-      font-size: 16px;
+      font-size: var(--font-note);
+      line-height: 1.15;
       text-align: center;
       color: var(--muted);
     }
     footer .btn .icon { width: 20px; height: 20px; color: inherit; }
+    /* "Something else" may wrap at its space, never mid-word. */
+    footer .btn { overflow-wrap: normal; }
+    /* In a very narrow panel the footer keeps its icons and drops the words. */
+    @media (max-width: 320px) {
+      footer .btn { font-size: 0; gap: 0; }
+      footer .btn .icon { width: 26px; height: 26px; }
+    }
   </style>
 </head>
 <body>
