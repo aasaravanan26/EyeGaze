@@ -44,17 +44,17 @@
       --pad-y: clamp(12px, 3vh, 22px);
       --gap: clamp(8px, 2.5vw, 14px);
       --radius: clamp(12px, 4vw, 20px);
-      --font-h1: clamp(18px, 6.5vw, 26px);
-      --font-intro: clamp(14px, 4.2vw, 17px);
-      --font-btn: clamp(15px, 5vw, 21px);
-      --font-sub: clamp(12px, 3.8vw, 16px);
-      --font-note: clamp(13px, 3.8vw, 16px);
-      --font-key: clamp(18px, 6.5vw, 28px);
-      --icon: clamp(22px, 6.5vw, 30px);
-      --btn-min: clamp(56px, 11vh, 88px);
-      --btn-pad: clamp(10px, 3vw, 16px) clamp(12px, 4vw, 20px);
-      --result-h: clamp(44px, 7.5vh, 55px);
-      --footer-h: clamp(56px, 10vh, 76px);
+      --font-h1: clamp(18px, 6.5vw, 40px);
+      --font-intro: clamp(14px, 4.2vw, 24px);
+      --font-btn: clamp(15px, 5vw, 32px);
+      --font-sub: clamp(12px, 3.8vw, 20px);
+      --font-note: clamp(13px, 3.8vw, 20px);
+      --font-key: clamp(18px, 6.5vw, 40px);
+      --icon: clamp(22px, 6.5vw, 44px);
+      --btn-min: clamp(56px, 11vh, 110px);
+      --btn-pad: clamp(10px, 3vw, 20px) clamp(12px, 4vw, 28px);
+      --result-h: clamp(44px, 7.5vh, 72px);
+      --footer-h: clamp(56px, 10vh, 96px);
     }
 
     * { box-sizing: border-box; min-width: 0; }
@@ -99,7 +99,9 @@
       font-size: var(--font-btn);
       font-weight: 700;
       line-height: 1.2;
-      text-align: left;
+      /* Content sits in the middle of the button, whatever its size. */
+      justify-content: center;
+      text-align: center;
       cursor: pointer;
       max-width: 100%;
     }
@@ -140,7 +142,7 @@
     .btn.selected .sub { color: var(--bg); }
 
     .btn .icon { flex: none; width: var(--icon); height: var(--icon); color: var(--icon); }
-    .btn .text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+    .btn .text { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
     .btn .sub { font-size: var(--font-sub); font-weight: 500; color: var(--muted); }
     /* Long titles (common on YouTube) stop at two lines. */
     .btn .label {
@@ -257,7 +259,7 @@
       text-align: center;
       color: var(--muted);
     }
-    footer .btn .icon { width: 20px; height: 20px; color: inherit; }
+    footer .btn .icon { width: clamp(18px, 3.5vw, 28px); height: clamp(18px, 3.5vw, 28px); color: inherit; }
     /* "Something else" may wrap at its space, never mid-word. */
     footer .btn { overflow-wrap: normal; }
     /* In a very narrow panel the footer keeps its icons and drops the words. */
